@@ -1,0 +1,10 @@
+{
+  "name": "xhodos/framework",
+  "type": "project",
+  "description": "The backbone for the xhodos PHP web application framework.",
+  "keywords": [
+    "xhodos",
+    "framework"
+  ],
+  "license": "MIT"
+}
