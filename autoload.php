@@ -1,7 +1,7 @@
 <?php
 
 /* Require the App Helper file */
-require_once ROOT . '/vendor/xhodos/Helpers/app.php';
+require_once ROOT . '/vendor/xhodos/framework/Helpers/app.php';
 
 $LOADED_CLASSES = new stdClass();
 
