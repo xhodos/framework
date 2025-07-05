@@ -13,7 +13,7 @@ ini_set('error_log', ROOT . '/system/framework/logs/errors.log');
 ini_set('display_errors', config('app.display_errors') ?? true);
 
 /* Require the constants file */
-require_once ROOT . '/vendor/Xcella/Hodos/constants.php';
+require_once ROOT . '/vendor/xhodos/framework/constants.php';
 
 /* Require the web routes file */
 require_once ROOT . '/routes/web.php';
