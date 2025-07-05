@@ -115,14 +115,14 @@ if (!function_exists('getViewFile')) {
 	function getViewFile($file):string
 	{
 		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $file;
-		return getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
+		return str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
 	}
 }
 
 if (!function_exists('loadFile')) {
 	function loadFile($path, ?array $data = NULL)
 	{
-		$file = getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
+		$file = str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
 			
 		if (is_readable($file)) {
 			if (!empty($data))
@@ -184,7 +184,7 @@ if (!function_exists('view')) {
 		$path_construct = constructViewFilePath($view);
 		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $path_construct;
 		
-		if (is_readable(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php')) {
+		if (is_readable(str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php'))) {
 			$template = new RenderView($path_construct);
 			
 			if (!empty($data))

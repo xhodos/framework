@@ -2,7 +2,7 @@
   "name": "xhodos/framework",
   "type": "project",
   "description": "The backbone for the xhodos PHP web application framework.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "keywords": [
     "xhodos",
     "framework"
