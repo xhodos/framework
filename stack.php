@@ -2,8 +2,12 @@
 
 use Hodos\Base\Stack;
 
+/* Form Session name */
+$session_name = preg_replace("/[0-9]/", '', env('APP_NAME') ?? 'xhodos');
+$session_name = preg_replace('/[ \t\r\n]/', '_', $session_name);
+
 /* Start App Session */
-session_name(env('APP_NAME') ?? 'xstack');
+session_name($session_name);
 session_start();
 
 ini_set('date.timezone', config('app.timezone') ?? date_default_timezone_get());
