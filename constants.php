@@ -24,4 +24,3 @@ define('BASE_REQUEST_URI', IS_LOCALHOST ? $getBaseRequestURI(2) : $getBaseReques
 define('URI', REQUEST_SCHEME . '://' . explode('?', HOST . REQUEST_URI)[0]);
 define('BASE_URI', REQUEST_SCHEME . '://' . HOST . (IS_LOCALHOST ? '/' . $getBaseURI(1) : $getBaseURI(0)));
 define('FULL_URI', URI . (!empty(QUERY_STRING) ? '?' . QUERY_STRING : NULL));
-
