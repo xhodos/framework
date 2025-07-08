@@ -56,7 +56,7 @@ final class Stack
 		
 		if (!call_user_func_array(is_array($route_action) ? [$controller, $route_action[1]] : $route_action, $args))
 			self::$instance->reject();
-		ValidatorResponse::unstackErrors();
+		// ValidatorResponse::unstackErrors();
 		return $args;
 	}
 	

@@ -17,7 +17,7 @@ trait BuildQuery
 	
 	public static function __instantiate()
 	{
-		if (!self::$instance || (self::$instance && (strtolower(get_class(self::$instance)) !== get_class(new (get_called_class())))))
+		if (!self::$instance || (self::$instance && (strtolower(get_class(self::$instance)) !== strtolower(get_class(new (get_called_class()))))))
 			self::$instance = new (get_called_class());
 		return self::$instance;
 	}

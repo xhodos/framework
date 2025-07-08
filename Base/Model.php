@@ -43,9 +43,6 @@ class Model
 	{
 		$this->setTable();
 		$this->db = DB::__instance()->connection;
-		
-		if (!self::$instance || (self::$instance && (strtolower(get_class(self::$instance)) !== get_class($this))))
-			self::$instance = $this;
 	}
 	
 	public function getTable()
@@ -95,7 +92,11 @@ class Model
 	public static function first()
 	{
 		$instance = self::__instantiate();
-		return ($instance->statement ? $instance->get() : $instance->all())[0];
+		if ($instance->statement) {
+			$result = $instance->get();
+			return !empty($result) ? $result[0] : NULL;
+		}
+		return !empty($instance->all()) ? $instance->all()[0] : NULL;
 	}
 	
 	public static function insert(array $attributes)
@@ -115,7 +116,7 @@ class Model
 				
 				if (!$query)
 					return false;
-				return $query;
+				return self::__instantiate()::where(['id' => $instance->db->insert_id])->first();
 			} catch (Exception $exception) {
 				throw $exception;
 			}
@@ -264,7 +265,7 @@ class Model
 			$columns .= "`$column`" . ($pairCount < $attributeCount ? ', ' : NULL);
 			$values .= (is_string($value) ? (!$value ? '?' : "'$value'") : (!empty($value) ? $value : 'NULL')) . ($pairCount < $attributeCount ? ', ' : NULL);
 		}
-		$statement = preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", "($columns)", preg_replace("/\{values\}/", "($values)", $this->statement)));
+		$statement = str_replace("{table}", "`$this->table`", str_replace("{columns}", "($columns)", str_replace("{values}", "($values)", $this->statement)));
 		
 		if (!empty($missing_colums)) {
 			$colum_to_string = implode(', ', $missing_colums);

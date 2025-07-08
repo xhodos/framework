@@ -31,14 +31,32 @@ class Request
 		return $this->$key;
 	}
 	
-	public function add($key, $value):void
+	public function add(mixed $key, mixed $value = NULL):void
 	{
-		$this->$key = $value;
+		$addKey = function ($key, $value) {
+			$this->$key = $value;
+			$this->original->$key = $value;
+		};
+		
+		if (is_array($key) || is_object($key))
+			foreach ($key as $idx => $value)
+				$addKey($idx, $value);
+		else
+			$addKey($key, $value);
 	}
 	
-	public function remove($key):void
+	public function remove(mixed $key):void
 	{
-		unset($this->$key);
+		$removeKey = function ($key) {
+			unset($this->$key);
+			unset($this->original->$key);
+		};
+		
+		if (is_array($key) || is_object($key))
+			foreach ($key as $value)
+				$removeKey($value);
+		else
+			$removeKey($key);
 	}
 	
 	public static function route()

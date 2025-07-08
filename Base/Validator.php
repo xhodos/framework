@@ -7,6 +7,7 @@ use Hodos\Stack\XObject;
 class Validator
 {
 	private ?XObject $errorBag;
+	private ?array $is_required = [];
 	private static ?Validator $instance = NULL;
 	
 	private function __construct()
@@ -19,11 +20,10 @@ class Validator
 	{
 		$ValidatorObject = new Validator;
 		$data_keys = array_keys($data);
-		
 		foreach ($rules as $key => $rule) {
 			if (in_array('required', $rule))
-				if (!in_array($key, $data_keys))
-					$is_required[] = $key;
+				if (in_array($key, $data_keys))
+					self::$instance->is_required[] = $key;
 		}
 		
 		$ValidatorObject->make($data, $rules);
@@ -70,6 +70,16 @@ class Validator
 						if (isset($data[$field]) && !date_create_from_format($format, $data[$field]))
 							$this->checkValidate($field, 'isNotDate');
 						break;
+					case 'max':
+						$length = intval($ruleOption ?? '8');
+						if ((!empty($data[$field]) && $length) && strlen($data[$field]) > $length)
+							$this->checkValidate($field, 'maxLength', $length);
+						break;
+					case 'min':
+						$length = intval($ruleOption ?? '1');
+						if ((!empty($data[$field]) && $length) && strlen($data[$field]) < $length)
+							$this->checkValidate($field, 'minLength', $length);
+						break;
 					default:
 						# code...
 						break;
@@ -89,11 +99,11 @@ class Validator
 	 * @param {('isRequired'|isNotArray|isNotDate|isNotString|isNotEmail|isNotNumeric)} $ruleFunc
 	 * @return void
 	 */
-	private function checkValidate(string $field, string $ruleFunc)
+	private function checkValidate(string $field, string $ruleFunc, ?int $length = 0)
 	{
 		if (empty($this->errorBag->$field))
 			$this->errorBag->$field = [];
-		$this->{$ruleFunc}(array_unique([$field]));
+		$length ? $this->{$ruleFunc}(array_unique([$field]), $length) : $this->{$ruleFunc}(array_unique([$field]));
 	}
 	
 	private function checkBailed(array $fields):void
@@ -104,6 +114,16 @@ class Validator
 				array_splice($this->errorBag->$field, 1, $errorCount - 1);
 			}
 		}
+	}
+	
+	private function maxLength(array $fields, int $length):void
+	{
+		$this->pushError($fields, "field requires a maximum of {$length} " . ($length > 1 ? 'characters' : 'character'));
+	}
+	
+	private function minLength(array $fields, int $length):void
+	{
+		$this->pushError($fields, "field requires a minimum of {$length} " . ($length > 1 ? 'characters' : 'character'));
 	}
 	
 	private function isRequired(array $fields):void

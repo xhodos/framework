@@ -6,8 +6,10 @@ use Hodos\Base\Stack;
 $session_name = preg_replace("/[0-9]/", '', env('APP_NAME') ?? 'xhodos');
 $session_name = preg_replace('/[ \t\r\n]/', '_', $session_name);
 
+define('SESSION_NAME', $session_name);
+
 /* Start App Session */
-session_name($session_name);
+session_name(SESSION_NAME);
 session_start();
 
 ini_set('date.timezone', config('app.timezone') ?? date_default_timezone_get());

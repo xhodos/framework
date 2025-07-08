@@ -15,7 +15,7 @@ final class DB
 	{
 	}
 	
-	public static function __instance()
+	public static function __instance(): self
 	{
 		if (!self::$instance)
 			self::$instance = new self;
@@ -25,12 +25,12 @@ final class DB
 	private function config()
 	{
 		try {
-			$env = strtoupper(config('APP_ENV'));
-			$host = env("DB_HOST_$env") ?? env('DB_HOST');
-			$user = env("DB_USER_$env") ?? env('DB_USER');
-			$port = (int) (env("DB_PORT_$env") ?? env('DB_PORT'));
-			$password = env("DB_PASSWORD_$env") ?? env('DB_PASSWORD');
-			$database = env("DB_DATABASE_$env") ?? env('DB_DATABASE');
+			$env = strtoupper(env('APP_ENV'));
+			$host = env("DB_HOST_$env", env('DB_HOST'));
+			$user = env("DB_USER_$env", env('DB_USER'));
+			$port = (int) (env("DB_PORT_$env", env('DB_PORT')));
+			$password = env("DB_PASSWORD_$env", env('DB_PASSWORD'));
+			$database = env("DB_DATABASE_$env", env('DB_DATABASE'));
 			
 			self::$instance->connection = new mysqli($host, $user, $password, $database, $port);
 		} catch (Exception $exception) {

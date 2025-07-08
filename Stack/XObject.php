@@ -20,11 +20,16 @@ class XObject
 		return count(self::toArray());
 	}
 	
+	/*public static function exists($key) {
+		$instance = self::$instance;
+		return $instance;
+	}*/
+	
 	public static function fromArray($datum)
 	{
 		$instance = self::$instance;
 		foreach ($datum as $key => $data)
-			if (property_exists(self::$instance, $key))
+			if (!property_exists($instance, $key))
 				$instance->$key = $data;
 		return $instance;
 	}

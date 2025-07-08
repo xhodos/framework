@@ -6,6 +6,7 @@ use Hodos\Base\Router;
 use Hodos\Base\ValidatorResponse;
 use Hodos\Stack\Errors\ViewError;
 use Hodos\Stack\Template\Engine;
+use Hodos\Stack\XObject;
 
 $getBaseRequestURI = fn (int $offset) => implode('/', array_slice(explode('/', REQUEST_URI), $offset));
 $getBaseURI = fn (int $index) => explode('/', REQUEST_URI)[$index];
@@ -13,7 +14,7 @@ $getBaseURI = fn (int $index) => explode('/', REQUEST_URI)[$index];
 if (!function_exists('asset')) {
 	function asset($path):string
 	{
-		return BASE_URI . '/' . (env('APP_ASSETS_DIR') ?? 'public') . '/' . $path;
+		return BASE_URI . '/' . env('APP_ASSETS_DIR', 'public') . '/' . $path;
 	}
 }
 
@@ -33,12 +34,21 @@ if (!function_exists('config')) {
 	}
 }
 
+function csrf_token(): string
+{
+	if (session_status() !== PHP_SESSION_ACTIVE)
+		session_start();
+	
+	if (empty($_SESSION['_csrf_token']))
+		$_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+	return $_SESSION['_csrf_token'];
+}
 
 if (!function_exists('env')) {
-	function env($name)
+	function env(string $name, ?string $default = '')
 	{
 		$env = parse_ini_file(getRootPath() . '/.env');
-		return key_exists($name, $env) ? $env[$name] : NULL;
+		return key_exists($name, $env) ? $env[$name] : $default;
 	}
 }
 
@@ -51,13 +61,6 @@ if (!function_exists('constructViewFilePath')) {
 		foreach ($path_array as $value)
 			$path_construct .= $value . (end($path_array) === $value ? NULL : '/');
 		return $path_construct;
-	}
-}
-
-if (!function_exists('getRootPath')) {
-	function getRootPath():false|string|null
-	{
-		return defined('PROJECT_ROOT') ? PROJECT_ROOT : (defined('ROOT') ? ROOT : Dir::root());
 	}
 }
 
@@ -90,6 +93,20 @@ if (!function_exists('dd')) {
 	}
 }
 
+if (!function_exists('errorBag')) {
+	function errorBag()
+	{
+		return ValidatorResponse::$errors;
+	}
+}
+
+if (!function_exists('getRootPath')) {
+	function getRootPath():false|string|null
+	{
+		return defined('PROJECT_ROOT') ? PROJECT_ROOT : (defined('ROOT') ? ROOT : Dir::root());
+	}
+}
+
 if (!function_exists('getUnderscoredClassName')) {
 	function getUnderscoredClassName($class):string
 	{
@@ -114,16 +131,16 @@ if (!function_exists('getUnderscoredName')) {
 if (!function_exists('getViewFile')) {
 	function getViewFile($file):string
 	{
-		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $file;
-		return str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
+		$path = env('APP_VIEWS_DIR', 'views') . '/' . $file;
+		return getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
 	}
 }
 
 if (!function_exists('loadFile')) {
 	function loadFile($path, ?array $data = NULL)
 	{
-		$file = str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
-			
+		$file = getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
+		
 		if (is_readable($file)) {
 			if (!empty($data))
 				extract($data);
@@ -132,11 +149,6 @@ if (!function_exists('loadFile')) {
 		}
 		return false;
 	}
-}
-
-function errorBag()
-{
-	return ValidatorResponse::$errors;
 }
 
 if (!function_exists('request')) {
@@ -154,7 +166,7 @@ if (!function_exists('request')) {
 if (!function_exists('route')) {
 	function route(string $name)
 	{
-		return !empty($name) && !empty(Router::routes($name)) ? Router::routes($name)->generatedURI : throw new Exception("Route name cannot be empty", 1);
+		return !empty($name) && !empty(Router::routes($name)) ? Router::routes($name)->generatedURI : throw new Error("Route name cannot be empty", 1);
 	}
 }
 
@@ -166,49 +178,6 @@ if (!function_exists('response')) {
 	}
 }
 
-if (!function_exists('view')) {
-	function view(string $view, ?array $data = NULL)
-	{
-		$path_construct = constructViewFilePath($view);
-		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $path_construct;
-		
-		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-			return print new Engine($view, $data)->render();
-		dd(new ViewError('View ' . $view . ' not found', 404));
-	}
-}
-
-/*if (!function_exists('view')) {
-	function view(string $view, ?array $data = NULL)
-	{
-		$path_construct = constructViewFilePath($view);
-		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $path_construct;
-		
-		if (is_readable(str_replace('\\', '/', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php'))) {
-			$template = new RenderView($path_construct);
-			
-			if (!empty($data))
-				foreach ($data as $key => $value)
-					$template->$key($value);
-			return print $template;
-		}
-		dd(new ViewError('View ' . $view . ' not found', 404));
-	}
-}*/
-
-/*if (!function_exists('viewTest')) {
-	function viewTest(string $view, ?array $data = NULL)
-	{
-		$path_construct = constructViewFilePath($view);
-		$path = (env('APP_VIEWS_DIR') ?? 'views') . '/' . $path_construct;
-		
-		if (is_readable(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-			return print new Engine($view, $data)->render();
-		dd(new ViewError('View ' . $view . ' not found', 404));
-	}
-}*/
-
-
 if (!function_exists('useDirectorySeparator')) {
 	function useDirectorySeparator($path)
 	{
@@ -216,64 +185,21 @@ if (!function_exists('useDirectorySeparator')) {
 	}
 }
 
-// RenderView Helpers
-if (!function_exists('attach')) {
-	function attach(string $view, ?array $data = NULL)
+if (!function_exists('view')) {
+	function view(string $view, ?array $data = NULL)
 	{
-		view($view, $data);
+		$path_construct = constructViewFilePath($view);
+		$path = env('APP_VIEWS_DIR', 'views') . '/' . $path_construct;
+		
+		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
+			return print new Engine($view, $data)->render();
+		dd(new ViewError('View ' . $view . ' not found', 404));
 	}
 }
 
-if (!function_exists('extendview')) {
-	/**
-	 * Summary of extendview
-	 *
-	 * @param mixed $view
-	 * @param mixed $data
-	 * @return int
-	 */
-	function extendview($view, ?array $data = NULL):int
+if (!function_exists('xobject')) {
+	function xobject():XObject
 	{
-		return RenderView::extend($view, $data);
-	}
-}
-
-if (!function_exists('endpush')) {
-	/**
-	 * Summary of endpush
-	 *
-	 * @return bool|string
-	 */
-	function endpush():bool|string
-	{
-		return RenderView::endsection();
-	}
-}
-
-if (!function_exists('push')) {
-	/**
-	 * Summary of push
-	 *
-	 * @param mixed $name
-	 * @param mixed $keep
-	 * @param mixed $callbacks
-	 * @return mixed
-	 */
-	function push($name, $keep = false, $callbacks = NULL):mixed
-	{
-		return RenderView::section($name, $keep, $callbacks);
-	}
-}
-
-if (!function_exists('stack')) {
-	/**
-	 * Summary of stack
-	 *
-	 * @param mixed $name
-	 * @return array|string|null
-	 */
-	function stack($name):array|string|null
-	{
-		return RenderView::stack($name);
+		return new XObject();
 	}
 }
