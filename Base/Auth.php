@@ -12,8 +12,8 @@ class Auth
 	private ?string $control = 'default';
 	private ?string $table = 'users';
 	
-	private ?XObject $cases;
-	private ?XObject $controls;
+	private ?XObject $cases = NULL;
+	private ?XObject $controls = NULL;
 	
 	private static ?Auth $instance = NULL;
 	
@@ -21,9 +21,6 @@ class Auth
 	{
 		if (!self::$instance)
 			self::$instance = new self;
-		
-		self::$instance->cases = new XObject();
-		self::$instance->controls = new XObject();
 		return self::$instance;
 	}
 	
@@ -64,11 +61,26 @@ class Auth
 		return true;
 	}
 	
+	public static function user()
+	{
+		$instance = self::__instance();
+		
+		if (!$instance->controls)
+			$instance->controls = $instance->init()->controls;
+		
+		if (Auth::check())
+			return $instance::getModel($instance->controls->{$instance->control}->model)::where(['id' => $_SESSION[SESSION_NAME . "_{$instance->table}_auth"]])->first();
+		return NULL;
+	}
+	
 	/**
 	 * @return Auth|null
 	 */
 	private function init()
 	{
+		self::$instance->cases = new XObject();
+		self::$instance->controls = new XObject();
+		
 		$controls = config('auth.controls');
 		$cases = config('auth.cases');
 		

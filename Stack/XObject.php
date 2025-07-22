@@ -2,10 +2,11 @@
 
 namespace Hodos\Stack;
 
+use AllowDynamicProperties;
 use Closure;
 use Countable;
 
-class XObject
+#[AllowDynamicProperties] class XObject
 {
 	private static ?XObject $instance = NULL;
 	
@@ -24,6 +25,14 @@ class XObject
 		$instance = self::$instance;
 		return $instance;
 	}*/
+	
+	public static function add($key, $value)
+	{
+		$instance = self::$instance;
+		if (!property_exists($instance, $key))
+			$instance->$key = $value;
+		// return $instance;
+	}
 	
 	public static function fromArray($datum)
 	{

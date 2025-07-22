@@ -7,7 +7,7 @@ use Hodos\Base\Model;
 
 trait BuildQuery
 {
-	private static $instance;
+	private static ?self $instance = NULL;
 	
 	private array $statementBuilder = [
 		'SELECT' => "SELECT {columns} FROM {table}",
@@ -22,7 +22,7 @@ trait BuildQuery
 		return self::$instance;
 	}
 	
-	public static function where(array $query, string $operator = 'AND', string $comparator = '='):Model
+	public static function where(array $query, string $operator = 'AND', string $comparator = '=')
 	{
 		$instance = self::__instantiate();
 		$instance->buildWhere($query, $operator, $comparator);
@@ -64,7 +64,7 @@ trait BuildQuery
 		return self::where($query, 'OR', '!=');
 	}
 	
-	private function buildWhere(array $queries, string $operator, string $comparator)
+	private function buildWhere(array $queries, string $operator, string $comparator):void
 	{
 		foreach ($this->showTableColumnData() as $key => $columnData) {
 			$field = $columnData->Field;
@@ -97,9 +97,9 @@ trait BuildQuery
 	 *
 	 * @param string $statement :"INSERT","SELECT","UPDATE"
 	 * @return void
-	 * @throws \Exception
+	 * @throws Exception
 	 */
-	private function buildQuery(string $statement)
+	private function buildQuery(string $statement):void
 	{
 		if (!is_string($this->statement))
 			throw new Exception('Empty SQL statement.');

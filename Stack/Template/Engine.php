@@ -73,6 +73,10 @@ class Engine
 	
 	private function processTemplate(string $templateContent):string
 	{
+		// Replace custom comments
+		$templateContent = preg_replace_callback('/{{--\s?/', fn ($matches) => "<!-- ", $templateContent);
+		$templateContent = preg_replace_callback('/\s?--}}/', fn ($matches) => " -->", $templateContent);
+		
 		// Replace variables
 		$templateContent = preg_replace_callback('/({!!\s?(.*?)\s?!!})/', function ($matches) {
 			return '<?= ' . $matches[2] . ' ?>';
@@ -80,7 +84,9 @@ class Engine
 		$templateContent = preg_replace_callback('/({{\s?(.*?)\s?}})/', function ($matches) {
 			return '<?= htmlspecialchars(' . $matches[2] . '); ?>';
 		}, $templateContent);
-			
+		
+		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
+		
 		// Replace foreach
 		// Advanced foreach
 		$templateContent = preg_replace_callback('/@foreach\s*\((.+?)\s+as\s+(.+?)\)/', function ($matches) {
@@ -91,25 +97,21 @@ class Engine
 		$templateContent = str_replace('@endforeach', '<?php endforeach; ?>', $templateContent);
 		
 		// Replace if/else/endif
-		$templateContent = preg_replace('/@if\s?\((.*?)\)/', '<?php if ($1): ?>', $templateContent);
-		$templateContent = preg_replace('/@elseif\s?\((.*?)\)/', '<?php elseif ($1): ?>', $templateContent);
+		$templateContent = preg_replace_callback('/@if\s?\((.*)\)/', fn ($matches) => "<?php if ($matches[1]): ?>", $templateContent);
+		$templateContent = preg_replace_callback('/@elseif\s?\((.*)\)/', fn ($matches) => "<?php elseif ($matches[1]): ?>", $templateContent);
 		$templateContent = str_replace('@else', '<?php else: ?>', $templateContent);
 		$templateContent = str_replace('@endif', '<?php endif; ?>', $templateContent);
 		
 		// Replace @csrf with actual csrf_token
-		$templateContent = preg_replace_callback('/@csrf/', function ($matches) {
-			return '<input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">';
-		}, $templateContent);
+		$templateContent = preg_replace_callback('/@csrf/', fn () => '<input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">', $templateContent);
 		
 		// Replace include
-		$templateContent = preg_replace_callback('/@include\s?\(["\'](.*?)["\'](.*?)\)/', function ($matches) {
-			return "<?= (" . __CLASS__ . "::renderStatic('$matches[1]', get_defined_vars())); ?>";
-		}, $templateContent);
+		$templateContent = preg_replace_callback('/@include\s?\(["\'](.*?)["\'](.*?)\)/', fn ($matches) => "<?= (" . __CLASS__ . "::renderStatic('$matches[1]', get_defined_vars())); ?>", $templateContent);
 		
 		// Process custom directives
 		foreach (self::$directives as $name => $handler) {
 			$templateContent = preg_replace_callback("/@$name\\s*(\\((.*?)\\))?", function ($matches) use ($handler) {
-				$args = isset($matches[2]) ? $matches[2] : '';
+				$args = $matches[2] ?? '';
 				return $handler($args);
 			}, $templateContent);
 		}

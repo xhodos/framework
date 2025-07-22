@@ -2,6 +2,7 @@
 
 namespace Hodos\Stack;
 
+use Error;
 use Exception;
 
 trait HasRelationship
@@ -9,65 +10,35 @@ trait HasRelationship
 	public function belongsTo(string $model, $localKey = NULL, $foreignKey = 'id')
 	{
 		$belongs = $this->belongs($model, $localKey, $foreignKey);
-		if ($belongs) {
-			$related = $belongs->first();
-			$related->related = $this;
-			return $related;
-		}
-	}
-	
-	public function belongsToMany(string $model, $localKey = NULL, $foreignKey = 'id')
-	{
-		$belongs = $this->belongs($model, $localKey, $foreignKey);
-		if ($belongs) {
-			$related = $belongs->first();
-			foreach ($related as $value)
-				$value->related = $this;
-			return $related;
-		}
-	}
-	
-	public function hasMany(string $model, $foreignKey = NULL, $localKey = 'id')
-	{
-		$has = $this->has($model, $foreignKey, $localKey);
-		if ($has) {
-			$related = $has->get();
-			foreach ($related as $value)
-				$value->related = $this;
-			return $related;
-		}
+		return $belongs ? $this->getRelationship($belongs) : NULL;
 	}
 	
 	public function hasOne(string $model, $foreignKey = NULL, $localKey = 'id')
 	{
 		$has = $this->has($model, $foreignKey, $localKey);
-		if ($has) {
-			$related = $has->first();
-			$related->related = $this;
-			return $related;
-		}
+		return $has ? $this->getRelationship($has) : NULL;
+	}
+	
+	public function belongsToMany(string $model, $localKey = NULL, $foreignKey = 'id')
+	{
+		$belongs = $this->belongs($model, $localKey, $foreignKey);
+		return $belongs ? $this->getRelationship($belongs, true) : NULL;
+	}
+	
+	public function hasMany(string $model, $foreignKey = NULL, $localKey = 'id')
+	{
+		$has = $this->has($model, $foreignKey, $localKey);
+		return $has ? $this->getRelationship($has, true) : NULL;
 	}
 	
 	private function belongs(string $model, $localKey, $foreignKey)
 	{
 		if (class_exists($model)) {
-			$foreignKeyExists = false;
 			$relatedClass = new $model;
-			
-			if (!$localKey)
-				$localKey = getUnderscoredClassName(get_class($relatedClass)) . '_id';
-			
-			foreach ($relatedClass->showTableColumnData() as $key => $columns)
-				if (strtolower($columns->Field) === strtolower($foreignKey)) {
-					$foreignKeyExists = true;
-					break;
-				}
-			
-			if (!$foreignKeyExists)
-				throw new Exception("Unknown column: $foreignKey; in table $relatedClass->table", 1);
+			$this->checkKeys($this, $relatedClass, $localKey);
 			
 			if (empty($this->$localKey))
-				throw new Exception("Unknown column: $localKey; in table $this->table", 1);
+				throw new Error("Unknown column: $localKey; in table $this->table", 1);
 			return $relatedClass::where([$foreignKey => $this->$localKey]);
 		}
 		return false;
@@ -77,24 +48,40 @@ trait HasRelationship
 	{
 		if (class_exists($model)) {
 			$relatedClass = new $model;
-			$foreignKeyExists = false;
-			
-			if (!$foreignKey)
-				$foreignKey = getUnderscoredClassName(get_class($this)) . '_id';
-			
-			foreach ($relatedClass->showTableColumnData() as $key => $columns)
-				if (strtolower($columns->Field) === strtolower($foreignKey)) {
-					$foreignKeyExists = true;
-					break;
-				}
-			
-			if (!$foreignKeyExists)
-				throw new Exception("Unknown column: $foreignKey; in table $relatedClass->table", 1);
+			$this->checkKeys($relatedClass, $this, $foreignKey);
 			
 			if (empty($this->$localKey))
-				throw new Exception("Unknown column: $localKey; in table $this->table", 1);
+				throw new Error("Unknown column: $localKey; in table $this->table", 1);
 			return $relatedClass::where([$foreignKey => $this->$localKey]);
 		}
 		return false;
+	}
+	
+	private function getRelationship($relationship, $many = false)
+	{
+		if (!$many) {
+			$related = $relationship->first();
+			$related->related = $this;
+		} else {
+			$related = $relationship->get();
+			foreach ($related as $value)
+				$value->related = $this;
+		}
+		return $related;
+	}
+	
+	private function checkKeys($relatedClass, $class, $key):void
+	{
+		$foreignKeyExists = false;
+		if (!$key)
+			$key = getUnderscoredClassName(get_class($class)) . '_id';
+		
+		foreach ($relatedClass->showTableColumnData() as $columns)
+			if (strtolower($columns->Field) === strtolower($key)) {
+				$foreignKeyExists = true;
+				break;
+			}
+		if (!$foreignKeyExists)
+			throw new Error("Unknown column: $key; in table $relatedClass->table", 1);
 	}
 }

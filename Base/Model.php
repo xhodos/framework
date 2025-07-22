@@ -3,7 +3,9 @@
 namespace Hodos\Base;
 
 use Exception;
+use Hodos\Stack\XObject;
 use mysqli;
+use mysqli_result;
 use mysqli_sql_exception;
 use stdClass;
 use Hodos\Stack\BuildQuery;
@@ -45,9 +47,9 @@ class Model
 		$this->db = DB::__instance()->connection;
 	}
 	
-	public function getTable()
+	public static function getTable()
 	{
-		return $this->table;
+		return self::__instantiate()->table;
 	}
 	
 	public function get(array $columns = ['*'])
@@ -89,7 +91,7 @@ class Model
 		return $instance->get();
 	}
 	
-	public static function first()
+	public static function first():mixed
 	{
 		$instance = self::__instantiate();
 		if ($instance->statement) {
@@ -97,6 +99,28 @@ class Model
 			return !empty($result) ? $result[0] : NULL;
 		}
 		return !empty($instance->all()) ? $instance->all()[0] : NULL;
+	}
+	
+	public static function toArray():array
+	{
+		$instance = self::__instantiate();
+		$final_result = [];
+		$result = !$instance->statement ? $instance->all() : $instance->get();
+		
+		foreach ($result as $key => $value)
+			$final_result[] = (array) $value->attributes;
+		return $final_result;
+	}
+	
+	public static function stackObject():XObject
+	{
+		$instance = self::__instantiate();
+		$final_result = xobject();
+		$result = !$instance->statement ? $instance->all() : $instance->get();
+		
+		foreach ($result as $key => $value)
+			$final_result->{$key} = xobject()::fromArray((array) $value->attributes);
+		return $final_result;
 	}
 	
 	public static function insert(array $attributes)
@@ -118,14 +142,14 @@ class Model
 					return false;
 				return self::__instantiate()::where(['id' => $instance->db->insert_id])->first();
 			} catch (Exception $exception) {
-				throw $exception;
+				return $exception;
 			}
 		} catch (Exception $exception) {
-			throw $exception;
+			return $exception;
 		}
 	}
 	
-	public function update(array $attributes)
+	public function update(array $attributes):mysqli_result|Exception|bool
 	{
 		try {
 			$this->buildQuery('UPDATE');
@@ -134,7 +158,7 @@ class Model
 				return false;
 			return $query;
 		} catch (Exception $exception) {
-			throw $exception;
+			return $exception;
 		}
 	}
 	
@@ -144,23 +168,23 @@ class Model
 		return $this->count;
 	}
 	
-	private function performGet($columns)
+	private function performGet($columns):mysqli_result|bool
 	{
-		$columsToString = implode(', ', $columns);
-		$statement = preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", $columsToString, $this->statement));
+		$columnsToString = implode(', ', $columns);
+		$statement = preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", $columnsToString, $this->statement));
 		return $this->performQuery($statement);
 	}
 	
-	private function prepareInsertStatement($attributes)
+	private function prepareInsertStatement($attributes):array|string
 	{
 		try {
 			return $this->validateInsert($attributes);
 		} catch (Exception $exception) {
-			throw $exception;
+			return $exception;
 		}
 	}
 	
-	private function performUpdate($attributes)
+	private function performUpdate($attributes):mysqli_result|bool
 	{
 		$pairCount = 0;
 		$column_value_pairs = '';
@@ -171,7 +195,7 @@ class Model
 			$column_value_pairs .= "`$column` = '$value'" . ($pairCount < $attributeCount ? ', ' : NULL);
 		}
 		
-		$statement = preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{column_value_pairs\}/", $column_value_pairs, $this->statement));
+		$statement = str_replace("{table}", "`$this->table`", str_replace("{column_value_pairs}", $column_value_pairs, $this->statement));
 		return $this->performQuery($statement);
 	}
 	
@@ -179,10 +203,10 @@ class Model
 	 * Summary of performQuery
 	 *
 	 * @param mixed $statement
-	 * @return bool|\mysqli_result
+	 * @return bool|mysqli_result
 	 * @throws mysqli_sql_exception
 	 */
-	private function performQuery($statement)
+	private function performQuery(mixed $statement):mysqli_result|bool
 	{
 		$this->statement = NULL;
 		$this->query = $statement;
@@ -195,7 +219,7 @@ class Model
 		}
 	}
 	
-	private function setTable(?string $table = NULL)
+	private function setTable(?string $table = NULL):void
 	{
 		if (!empty($table))
 			$this->table = $table;
@@ -208,7 +232,7 @@ class Model
 		}
 	}
 	
-	private function showTableColumnData()
+	private function showTableColumnData():array
 	{
 		$column_details = [];
 		$columns = $this->db->query("SHOW COLUMNS FROM `$this->table`");
@@ -217,7 +241,7 @@ class Model
 		return $column_details;
 	}
 	
-	private function validateInsert(array $attributes)
+	private function validateInsert(array $attributes):array|string
 	{
 		$columns = '';
 		$values = '';

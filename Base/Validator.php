@@ -65,6 +65,27 @@ class Validator
 						if (isset($data[$field]) && !is_array($data[$field]))
 							$this->checkValidate($field, 'isNotArray');
 						break;
+					case 'file':
+						$isEmpty = false;
+						
+						foreach ($data[$field] as $file)
+							if (is_array($file)) {
+								if (!empty($file[0]))
+									break;
+								else {
+									$isEmpty = true;
+									break;
+								}
+							} else {
+								if (empty($file['name'])) {
+									$isEmpty = true;
+									break;
+								}
+							}
+						
+						if ($isEmpty || (isset($data[$field]) && !is_array($data[$field])))
+							$this->checkValidate($field, 'isNotFile');
+						break;
 					case 'date':
 						$format = $ruleOption ?? 'Y-m-d';
 						if (isset($data[$field]) && !date_create_from_format($format, $data[$field]))
@@ -96,10 +117,11 @@ class Validator
 	 * Summary of checkValidate
 	 *
 	 * @param string $field
-	 * @param {('isRequired'|isNotArray|isNotDate|isNotString|isNotEmail|isNotNumeric)} $ruleFunc
+	 * @param string $ruleFunc
+	 * @param int|null $length
 	 * @return void
 	 */
-	private function checkValidate(string $field, string $ruleFunc, ?int $length = 0)
+	private function checkValidate(string $field, string $ruleFunc, ?int $length = 0):void
 	{
 		if (empty($this->errorBag->$field))
 			$this->errorBag->$field = [];
@@ -134,6 +156,11 @@ class Validator
 	private function isNotArray(array $fields):void
 	{
 		$this->pushError($fields, 'field must be an array.');
+	}
+	
+	private function isNotFile(array $fields):void
+	{
+		$this->pushError($fields, 'field must be an uploaded file or sets of files.');
 	}
 	
 	private function isNotDate(array $fields):void

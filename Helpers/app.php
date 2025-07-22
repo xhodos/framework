@@ -34,7 +34,14 @@ if (!function_exists('config')) {
 	}
 }
 
-function csrf_token(): string
+if (!function_exists('correctDirPath')) {
+	function correctDirPath(string $path):string
+	{
+		return str_replace('\\', '/', $path);
+	}
+}
+
+function csrf_token():string
 {
 	if (session_status() !== PHP_SESSION_ACTIVE)
 		session_start();
@@ -97,6 +104,19 @@ if (!function_exists('errorBag')) {
 	function errorBag()
 	{
 		return ValidatorResponse::$errors;
+	}
+}
+
+if (!function_exists('formatSize')) {
+	function formatSize($bytes, int $precision = 2):string
+	{
+		$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+		
+		$bytes = max($bytes, 0);
+		$pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+		$pow = min($pow, count($units) - 1);
+		$bytes /= pow(1024, $pow);
+		return round($bytes, $precision) . ' ' . $units[$pow];
 	}
 }
 
@@ -186,13 +206,13 @@ if (!function_exists('useDirectorySeparator')) {
 }
 
 if (!function_exists('view')) {
-	function view(string $view, ?array $data = NULL)
+	function view(string $view, ?array $data = [])
 	{
 		$path_construct = constructViewFilePath($view);
 		$path = env('APP_VIEWS_DIR', 'views') . '/' . $path_construct;
 		
 		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-			return print new Engine($view, $data)->render();
+			return print Engine::renderStatic($view, $data);
 		dd(new ViewError('View ' . $view . ' not found', 404));
 	}
 }

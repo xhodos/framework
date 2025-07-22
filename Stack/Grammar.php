@@ -50,7 +50,7 @@ final class Grammar
 	private function matchPluralReplacement(string $word)
 	{
 		$matched_keys = [];
-		$plural_keys = array_keys($this::$plurals);
+		$plural_keys = array_keys(self::$plurals);
 		
 		foreach ($plural_keys as $key => $plural_key) {
 			preg_match("/$plural_key$/", $word, $matches);
@@ -58,7 +58,7 @@ final class Grammar
 				$matched_keys[] = $plural_key;
 		}
 		$matched_key = array_reduce($matched_keys, fn ($carry, $item) => strlen($item) > strlen($carry) ? $item : $carry);
-		$replacement = !empty($matched_key) ? $this::$plurals[$matched_key] : NULL;
+		$replacement = !empty($matched_key) ? self::$plurals[$matched_key] : NULL;
 		if (!empty($replacement) && is_array($replacement))
 			$replacement = $this->getConsonantPlural($word, $matched_key, $replacement);
 		return (object) compact('matched_key', 'replacement');
