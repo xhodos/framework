@@ -58,23 +58,24 @@ class Model
 		
 		try {
 			$this->buildQuery('SELECT');
-			$query = $this->performGet($columns);
+			$statement = $this->performGet($columns);
+			$query = $this->performQuery($statement);
 			$this->count = $query->num_rows;
 			
 			while ($row = $query->fetch_object())
 				$result[] = $row;
 			$temp_result = $result;
 			
-			foreach ($temp_result as $key => $values) {
+			foreach ($temp_result as $i => $values) {
 				$instance = new $this;
-				$result[$key] = $instance;
+				$result[$i] = $instance;
 				$instance->original = $values;
 				$instance->attributes = new stdClass();
 				
-				foreach ($values as $key => $value)
-					if (!in_array($key, $this->hidden)) {
-						$instance->$key = $value;
-						$instance->attributes->$key = $value;
+				foreach ($values as $j => $value)
+					if (!in_array($j, $this->hidden)) {
+						$instance->$j = $value;
+						$instance->attributes->$j = $value;
 					}
 			}
 			unset($temp_result);
@@ -89,6 +90,60 @@ class Model
 		$instance = self::__instantiate();
 		$instance->statement = '';
 		return $instance->get();
+	}
+	
+	public static function orderBy(?array $orderByColumns = ['id' => 'desc'])
+	{
+		$instance = self::__instantiate();
+		$orderByStatement = 'ORDER BY ';
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		
+		foreach ($orderByColumns as $column => $direction)
+			$orderByStatement .= "`$instance->table`." . (gettype($column) !== 'string' ? "`$direction` ASC" : "`$column` " . strtoupper($direction)) . (array_key_last($orderByColumns) !== $column ? ' , ' : NULL);
+		$instance->statement .= !str_contains($instance->statement, ' ORDER BY ') ? " $orderByStatement" : '';
+		return $instance;
+	}
+	
+	public static function limit(int $limit)
+	{
+		$instance = self::__instantiate();
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		$instance->statement .= !str_contains($instance->statement, ' LIMIT ') ? " LIMIT $limit" : '';
+		return $instance;
+	}
+	
+	public static function offset(int $offset)
+	{
+		$instance = self::__instantiate();
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		$instance->statement .= !str_contains($instance->statement, ' OFFSET ') ? " OFFSET $offset" : '';
+		return $instance;
+	}
+	
+	public static function basicPaginate(int $perPage, ?int $page = 1, ?array $orderByColumns = ['id' => 'asc']):?XObject
+	{
+		$instance = self::__instantiate();
+		$page = max($page, 1);
+		$instance->orderBy($orderByColumns)->limit($perPage)->offset(($page - 1) * $perPage);
+		
+		$total_items = $instance->db->execute_query("SELECT COUNT(*) AS total FROM `$instance->table`")->fetch_object()->total ?? 0;
+		$total_pages = ceil($total_items / $perPage);
+		$pagination = new stdClass();
+		$data = xobject();
+		
+		$items = $instance->get();
+		$pagination->has_prev = $page > 1;
+		$pagination->has_next = $page < $total_pages;
+		$pagination->prev = $pagination->has_prev ? $page - 1 : NULL;
+		$pagination->next = $pagination->has_next ? $page + 1 : NULL;
+		$paginationDetails = compact('items', 'pagination', 'total_items', 'total_pages');
+		return $data->fromArray($paginationDetails);
 	}
 	
 	public static function first():mixed
@@ -168,11 +223,10 @@ class Model
 		return $this->count;
 	}
 	
-	private function performGet($columns):mysqli_result|bool
+	private function performGet($columns):array|string|null
 	{
 		$columnsToString = implode(', ', $columns);
-		$statement = preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", $columnsToString, $this->statement));
-		return $this->performQuery($statement);
+		return preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", $columnsToString, $this->statement));
 	}
 	
 	private function prepareInsertStatement($attributes):array|string

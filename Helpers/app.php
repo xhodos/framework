@@ -14,7 +14,7 @@ $getBaseURI = fn (int $index) => explode('/', REQUEST_URI)[$index];
 if (!function_exists('asset')) {
 	function asset($path):string
 	{
-		return BASE_URI . '/' . env('APP_ASSETS_DIR', 'public') . '/' . $path;
+		return correctDirPath(BASE_URI . '/' . env('APP_ASSETS_DIR', 'public') . '/' . $path);
 	}
 }
 
@@ -123,7 +123,7 @@ if (!function_exists('formatSize')) {
 if (!function_exists('getRootPath')) {
 	function getRootPath():false|string|null
 	{
-		return defined('PROJECT_ROOT') ? PROJECT_ROOT : (defined('ROOT') ? ROOT : Dir::root());
+		return correctDirPath(defined('PROJECT_ROOT') ? PROJECT_ROOT : (defined('ROOT') ? ROOT : Dir::root()));
 	}
 }
 
@@ -152,14 +152,14 @@ if (!function_exists('getViewFile')) {
 	function getViewFile($file):string
 	{
 		$path = env('APP_VIEWS_DIR', 'views') . '/' . $file;
-		return getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
+		return correctDirPath(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
 	}
 }
 
 if (!function_exists('loadFile')) {
 	function loadFile($path, ?array $data = NULL)
 	{
-		$file = getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php';
+		$file = correctDirPath(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
 		
 		if (is_readable($file)) {
 			if (!empty($data))
@@ -208,13 +208,19 @@ if (!function_exists('useDirectorySeparator')) {
 if (!function_exists('view')) {
 	function view(string $view, ?array $data = [])
 	{
-		$path_construct = constructViewFilePath($view);
-		$path = env('APP_VIEWS_DIR', 'views') . '/' . $path_construct;
-		
-		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-			return print Engine::renderStatic($view, $data);
-		dd(new ViewError('View ' . $view . ' not found', 404));
+		return print interceptView($view, $data);
 	}
+}
+
+function interceptView(string $view, ?array $data = [])
+{
+	$path_construct = constructViewFilePath($view);
+	$path = correctDirPath(env('APP_VIEWS_DIR', 'views') . '/' . $path_construct);
+	
+	if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
+		return Engine::renderStatic($view, $data);
+	else
+		dd(new ViewError('View ' . $view . ' not found', 404));
 }
 
 if (!function_exists('xobject')) {

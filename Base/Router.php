@@ -86,7 +86,7 @@ class Router extends Request
 			$argument_name = $argument->getName();
 			$argument_type = $argument->getType()->getName();
 			
-			$request_class_name = new ReflectionClass(Request::class)->getName();
+			$request_class_name = (new ReflectionClass(Request::class))->getName();
 			/* $model_class_name = (new ReflectionClass(Model::class))->getShortName();
 			$arg_parent_class_name = (new ReflectionClass($argument_type))->getParentClass(); */
 			// $args[$argument_name] = $argument_type === $request_class_name ? $build_request->request : (!$argument->getType()->isBuiltin() ? (($arg_parent_class_name && $arg_parent_class_name->getShortName() === $model_class_name) ? $argument_type::instantiate() : new $argument_type) : NULL);
@@ -155,6 +155,7 @@ class Router extends Request
 						
 						
 						$REQUEST = new parent($routeInfo->method);
+						$REQUEST->server = $_SERVER;
 						$REQUEST->original = $parameters;
 						$REQUEST->route_uri = $routeInfo->uri;
 						

@@ -8,6 +8,7 @@ use Hodos\Stack\XObject;
 class Request
 {
 	protected mixed $original;
+	protected mixed $server;
 	
 	protected ?string $route_uri;
 	
@@ -57,6 +58,11 @@ class Request
 				$removeKey($value);
 		else
 			$removeKey($key);
+	}
+	
+	public function isAjax():bool
+	{
+		return isset($this->server->HTTP_X_REQUESTED_WITH) && strtolower($this->server->HTTP_X_REQUESTED_WITH) === 'xmlhttprequest';
 	}
 	
 	public static function route()

@@ -66,7 +66,7 @@ trait BuildQuery
 	
 	private function buildWhere(array $queries, string $operator, string $comparator):void
 	{
-		foreach ($this->showTableColumnData() as $key => $columnData) {
+		foreach ($this->showTableColumnData() as $columnData) {
 			$field = $columnData->Field;
 			unset($this->$field);
 		}

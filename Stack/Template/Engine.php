@@ -19,7 +19,7 @@ class Engine
 	
 	public static function renderStatic(string $template, array $data = []):string
 	{
-		return new static($template, $data)->render();
+		return (new static($template, $data))->render();
 	}
 	
 	public static function directive(string $name, callable $handler):void
@@ -63,12 +63,12 @@ class Engine
 		include $cacheFile;
 	}
 	
-	private function yieldContent($layoutFile, $sections):string
+	private function yieldContent($templateContent, $sections, $layout):string
 	{
 		// Replace @yield with section content
-		return preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($sections) {
-			return $sections[$match[1]] ?? '';
-		}, file_get_contents($layoutFile));
+		return preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($sections, $layout) {
+			return $sections[$layout . $match[1]] ?? '';
+		}, $templateContent);
 	}
 	
 	private function processTemplate(string $templateContent):string
@@ -84,8 +84,6 @@ class Engine
 		$templateContent = preg_replace_callback('/({{\s?(.*?)\s?}})/', function ($matches) {
 			return '<?= htmlspecialchars(' . $matches[2] . '); ?>';
 		}, $templateContent);
-		
-		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
 		
 		// Replace foreach
 		// Advanced foreach
@@ -164,9 +162,7 @@ class Engine
 		$finalContent = $this->compileLayoutChain($parentLayout, $mergedSections);
 		
 		// Replace yields with final section content
-		return $this->processTemplate(preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($mergedSections, $layout) {
-			return $mergedSections[$layout . $match[1]] ?? '';
-		}, $finalContent));
+		return $this->processTemplate($this->yieldContent($finalContent, $sections, $layout));
 	}
 	
 	
@@ -174,6 +170,6 @@ class Engine
 	{
 		$constructViewFilePath = constructViewFilePath($view ?? $this->view);
 		$viewFilePath = env('APP_VIEWS_DIR', 'views') . '/' . $constructViewFilePath;
-		return str_replace('.xs.php', '', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($viewFilePath)) . '.xs.php';
+		return str_replace('\\', '/', str_replace('.xs.php', '', getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($viewFilePath)) . '.xs.php');
 	}
 }
