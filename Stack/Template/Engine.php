@@ -92,7 +92,6 @@ class Engine
 				return '<?php break; ?>';
 		}, $templateContent);
 		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
-		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
 		
 		// Replace foreach
 		// Advanced foreach
