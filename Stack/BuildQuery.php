@@ -13,6 +13,7 @@ trait BuildQuery
 		'SELECT' => "SELECT {columns} FROM {table}",
 		'INSERT' => "INSERT INTO {table} {columns} VALUES {values}",
 		'UPDATE' => "UPDATE {table} SET {column_value_pairs}",
+		'DELETE' => "DELETE FROM {table}",
 	];
 	
 	public static function __instantiate()

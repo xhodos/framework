@@ -85,6 +85,15 @@ class Engine
 			return '<?= htmlspecialchars(' . $matches[2] . '); ?>';
 		}, $templateContent);
 		
+		$templateContent = preg_replace_callback('/(@break(\((.*)\))?)/', function ($matches) {
+			if (array_key_exists(3, $matches))
+				return '<?php if(' . $matches[3] . '): ?>break;<?php endif; ?>';
+			else
+				return '<?php break; ?>';
+		}, $templateContent);
+		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
+		$templateContent = preg_replace_callback('/@dd\((.*)\)/', fn ($matches) => "<?php dd($matches[1]) ?>", $templateContent);
+		
 		// Replace foreach
 		// Advanced foreach
 		$templateContent = preg_replace_callback('/@foreach\s*\((.+?)\s+as\s+(.+?)\)/', function ($matches) {

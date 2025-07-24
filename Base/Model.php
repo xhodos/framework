@@ -204,9 +204,61 @@ class Model
 		}
 	}
 	
+	public function delete():mysqli_result|Exception|bool
+	{
+		try {
+			if (!$this->statement) {
+				$primary_column = '';
+				$primary_value = NULL;
+				
+				foreach ($this->showTableColumnData() as $key => $column)
+					if ($column->Key === 'PRI') {
+						$primary_column = $column->Field;
+						break;
+					} else {
+						if (array_key_last($this->showTableColumnData()) === $key)
+							$primary_column = $this->showTableColumnData()[0]->Field;
+					}
+				foreach ($this->attributes as $column => $value)
+					if (strtolower($column) === strtolower($primary_column)) {
+						$primary_value = $value;
+							break;
+					}
+				$this->buildWhere([$primary_column => $primary_value], 'AND', '=');
+			}
+			$this->buildQuery('DELETE');
+			$this->statement = str_replace('{table}', "`$this->table`", $this->statement);
+			$query = $this->performQuery($this->statement);
+			if (!$this->db->affected_rows)
+				return false;
+			return $query;
+		} catch (Exception $exception) {
+			return $exception;
+		}
+	}
+	
 	public function update(array $attributes):mysqli_result|Exception|bool
 	{
 		try {
+			if (!$this->statement) {
+				$primary_column = '';
+				$primary_value = NULL;
+				
+				foreach ($this->showTableColumnData() as $key => $column)
+					if ($column->Key === 'PRI') {
+						$primary_column = $column->Field;
+						break;
+					} else {
+						if (array_key_last($this->showTableColumnData()) === $key)
+							$primary_column = $this->showTableColumnData()[0]->Field;
+					}
+				foreach ($this->attributes as $column => $value)
+					if (strtolower($column) === strtolower($primary_column)) {
+						$primary_value = $value;
+						break;
+					}
+				$this->buildWhere([$primary_column => $primary_value], 'AND', '=');
+			}
 			$this->buildQuery('UPDATE');
 			$query = $this->performUpdate($attributes);
 			if (!$this->db->affected_rows)
@@ -303,10 +355,9 @@ class Model
 		$pairCount = 0;
 		$attributeCount = count($attributes);
 		
-		$missing_colums = [];
-		$available_colums = [];
+		$available_columns = [];
 		
-		$default_colums = [];
+		$default_columns = [];
 		$required_columns = [];
 		$enum_column_pairs = [];
 		$column_details = $this->showTableColumnData();
@@ -316,7 +367,7 @@ class Model
 				if (strtolower($column_detail->Null) === 'no' && !str_contains($column_detail->Extra, 'auto_increment'))
 					$required_columns[] = strtolower($column_detail->Field);
 			} else {
-				$default_colums[$column_detail->Field] = $column_detail->Default;
+				$default_columns[$column_detail->Field] = $column_detail->Default;
 			}
 			
 			if (str_contains($column_detail->Type, 'enum(')) {
@@ -329,14 +380,14 @@ class Model
 		foreach ($attributes as $key => $value) {
 			$column = strtolower($key);
 			if (in_array($column, $required_columns))
-				$available_colums[] = $column;
+				$available_columns[] = $column;
 			
 			if (array_key_exists($column, $enum_column_pairs)) {
 				if (!in_array($value, $enum_column_pairs[$column]))
-					$attributes[$column] = array_key_exists($column, $default_colums) ? $default_colums[$column] : $enum_column_pairs[$column][0];
+					$attributes[$column] = array_key_exists($column, $default_columns) ? $default_columns[$column] : $enum_column_pairs[$column][0];
 			}
 		}
-		$missing_colums = array_diff($required_columns, $available_colums);
+		$missing_columns = array_diff($required_columns, $available_columns);
 		
 		foreach ($attributes as $column => $value) {
 			$pairCount++;
@@ -345,8 +396,8 @@ class Model
 		}
 		$statement = str_replace("{table}", "`$this->table`", str_replace("{columns}", "($columns)", str_replace("{values}", "($values)", $this->statement)));
 		
-		if (!empty($missing_colums)) {
-			$colum_to_string = implode(', ', $missing_colums);
+		if (!empty($missing_columns)) {
+			$colum_to_string = implode(', ', $missing_columns);
 			throw new mysqli_sql_exception("Error: The following fields are required but missing in the query: $colum_to_string<p>Query: $statement</p>", 1);
 		}
 		return $statement;

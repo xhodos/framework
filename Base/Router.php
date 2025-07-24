@@ -130,9 +130,10 @@ class Router extends Request
 					$total_matched += (preg_split('/\?|\#/', $_request_uri_exploded[$i])[0] === $_current_uri_exploded[$i] || preg_match_all($param_exp, $_current_uri_exploded[$i], $matches)) ? 1 : 0;
 				
 				if ($total_matched === count($_current_uri_exploded))
-					if (strtolower($_SERVER['REQUEST_METHOD']) === 'head' || strtolower($routeInfo->method) === 'any' || strtolower($routeInfo->method) === strtolower($_SERVER['REQUEST_METHOD'])) {
+					if (strtolower($_SERVER['REQUEST_METHOD']) === 'head' || strtolower($routeInfo->method) === 'any' || strtolower($routeInfo->method) === strtolower($_SERVER['REQUEST_METHOD']) || strtolower($_SERVER['REQUEST_METHOD']) === 'post' && isset($_POST['_method']) && strtolower($routeInfo->method) === strtolower($_POST['_method'])) {
 						$build_parameters = [];
 						$parameters = new XObject();
+						$api_methods = ['put', 'patch', 'delete'];
 						$request_parameters = strtolower($routeInfo->method) === 'get' ? $_REQUEST : array_merge($_REQUEST, $_FILES);
 						
 						if (preg_match_all($param_exp, $this->route_uri, $matches)) {
@@ -148,7 +149,7 @@ class Router extends Request
 						}
 						
 						foreach ($request_parameters as $key => $value)
-							$parameters->$key = $value;
+							$parameters->$key = match ($value) {'true' => true, 'false' => false, default => $value};
 						
 						foreach ($parameters as $key => $value)
 							$build_parameters[$key] = $value;

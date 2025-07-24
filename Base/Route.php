@@ -48,7 +48,7 @@ class Route extends Router
 	
 	public static function delete(string $uri, array|Closure $action)
 	{
-		return Route::setRoute($uri, $action, 'patch');
+		return Route::setRoute($uri, $action, 'delete');
 	}
 	
 	/**
