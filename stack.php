@@ -3,7 +3,7 @@
 use Hodos\Base\Stack;
 
 /* Form Session name */
-$session_name = preg_replace("/[0-9]/", '', env('APP_NAME') ?? 'xhodos');
+$session_name = preg_replace("/[0-9]/", '', env('APP_NAME', 'xhodos'));
 $session_name = preg_replace('/[ \t\r\n]/', '_', $session_name);
 
 define('SESSION_NAME', $session_name);
