@@ -6,6 +6,7 @@ use Hodos\Base\Router;
 use Hodos\Base\ValidatorResponse;
 use Hodos\Stack\Errors\ViewError;
 use Hodos\Stack\Template\Engine;
+use Hodos\Stack\Template\View;
 use Hodos\Stack\XObject;
 
 $getBaseRequestURI = fn (int $offset) => implode('/', array_slice(explode('/', REQUEST_URI), $offset));
@@ -206,21 +207,16 @@ if (!function_exists('useDirectorySeparator')) {
 }
 
 if (!function_exists('view')) {
-	function view(string $view, ?array $data = [])
+	function view(string $view, ?array $data = []): View
 	{
-		return print interceptView($view, $data);
+		$path_construct = constructViewFilePath($view);
+		$path = correctDirPath(env('APP_VIEWS_DIR', 'views') . '/' . $path_construct);
+		
+		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
+			return Engine::renderStatic($view, $data);
+		else
+			dd(new ViewError('View ' . $view . ' not found', 404));
 	}
-}
-
-function interceptView(string $view, ?array $data = [])
-{
-	$path_construct = constructViewFilePath($view);
-	$path = correctDirPath(env('APP_VIEWS_DIR', 'views') . '/' . $path_construct);
-	
-	if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-		return Engine::renderStatic($view, $data);
-	else
-		dd(new ViewError('View ' . $view . ' not found', 404));
 }
 
 if (!function_exists('xobject')) {

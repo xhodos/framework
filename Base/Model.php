@@ -52,6 +52,148 @@ class Model
 		return self::__instantiate()->table;
 	}
 	
+	public static function all()
+	{
+		$instance = self::__instantiate();
+		$instance->statement = '';
+		return $instance->get();
+	}
+	
+	public static function basicPaginate(int $perPage, ?int $page = 1, ?array $orderByColumns = ['id' => 'asc']):?XObject
+	{
+		$instance = self::__instantiate();
+		$page = max($page, 1);
+		$instance->orderBy($orderByColumns)->limit($perPage)->offset(($page - 1) * $perPage);
+		
+		$total_items = $instance->count();
+		$total_pages = ceil($total_items / $perPage);
+		$pagination = new stdClass();
+		$data = xobject();
+		
+		$items = $instance->get();
+		$pagination->has_prev = $page > 1;
+		$pagination->has_next = $page < $total_pages;
+		$pagination->prev = $pagination->has_prev ? $page - 1 : NULL;
+		$pagination->next = $pagination->has_next ? $page + 1 : NULL;
+		$pagination->current = $page;
+		$paginationDetails = compact('items', 'pagination', 'total_items', 'total_pages');
+		return $data->fromArray($paginationDetails);
+	}
+	
+	public static function count()
+	{
+		$instance = self::__instantiate();
+		return $instance->db->execute_query("SELECT COUNT(*) AS total FROM `$instance->table`")->fetch_object()->total ?? 0;
+	}
+	
+	public static function limit(int $limit)
+	{
+		$instance = self::__instantiate();
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		$instance->statement .= !str_contains($instance->statement, ' LIMIT ') ? " LIMIT $limit" : '';
+		return $instance;
+	}
+	
+	public static function first():mixed
+	{
+		$instance = self::__instantiate();
+		if ($instance->statement) {
+			$result = $instance->get();
+			return !empty($result) ? $result[0] : NULL;
+		}
+		return !empty($instance->all()) ? $instance->all()[0] : NULL;
+	}
+	
+	public static function insert(array $attributes)
+	{
+		$instance = self::__instantiate();
+		try {
+			if (!empty($attributes))
+				$instance->statement = '';
+			else
+				throw new Exception('Empty SQL statement.');
+			
+			$instance->buildQuery('INSERT');
+			$statement = $instance->prepareInsertStatement($attributes);
+			
+			try {
+				$query = $instance->performQuery($statement);
+				
+				if (!$query)
+					return false;
+				return self::__instantiate()::where(['id' => $instance->db->insert_id])->first();
+			} catch (Exception $exception) {
+				return $exception;
+			}
+		} catch (Exception $exception) {
+			return $exception;
+		}
+	}
+	
+	public static function offset(int $offset)
+	{
+		$instance = self::__instantiate();
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		$instance->statement .= !str_contains($instance->statement, ' OFFSET ') ? " OFFSET $offset" : '';
+		return $instance;
+	}
+	
+	public static function orderBy(?array $orderByColumns = ['id' => 'desc'])
+	{
+		$instance = self::__instantiate();
+		$orderByStatement = 'ORDER BY ';
+		
+		if (!$instance->statement)
+			$instance->statement = '';
+		
+		foreach ($orderByColumns as $column => $direction)
+			$orderByStatement .= "`$instance->table`." . (gettype($column) !== 'string' ? "`$direction` ASC" : "`$column` " . strtoupper($direction)) . (array_key_last($orderByColumns) !== $column ? ' , ' : NULL);
+		$instance->statement .= !str_contains($instance->statement, ' ORDER BY ') ? " $orderByStatement" : '';
+		return $instance;
+	}
+	
+	public static function stackObject():XObject
+	{
+		$instance = self::__instantiate();
+		$final_result = xobject();
+		$result = !$instance->statement ? $instance->all() : $instance->get();
+		
+		foreach ($result as $key => $value)
+			$final_result->{$key} = xobject()::fromArray((array) $value->attributes);
+		return $final_result;
+	}
+	
+	public static function toArray():array
+	{
+		$instance = self::__instantiate();
+		$final_result = [];
+		$result = !$instance->statement ? $instance->all() : $instance->get();
+		
+		foreach ($result as $key => $value)
+			$final_result[] = (array) $value->attributes;
+		return $final_result;
+	}
+	
+	public function delete():mysqli_result|Exception|bool
+	{
+		try {
+			if (!$this->statement)
+				$this->buildStatement();
+			$this->buildQuery('DELETE');
+			$this->statement = str_replace('{table}', "`$this->table`", $this->statement);
+			$query = $this->performQuery($this->statement);
+			if (!$this->db->affected_rows)
+				return false;
+			return $query;
+		} catch (Exception $exception) {
+			return $exception;
+		}
+	}
+	
 	public function get(array $columns = ['*'])
 	{
 		$result = [];
@@ -85,180 +227,11 @@ class Model
 		}
 	}
 	
-	public static function all()
-	{
-		$instance = self::__instantiate();
-		$instance->statement = '';
-		return $instance->get();
-	}
-	
-	public static function orderBy(?array $orderByColumns = ['id' => 'desc'])
-	{
-		$instance = self::__instantiate();
-		$orderByStatement = 'ORDER BY ';
-		
-		if (!$instance->statement)
-			$instance->statement = '';
-		
-		foreach ($orderByColumns as $column => $direction)
-			$orderByStatement .= "`$instance->table`." . (gettype($column) !== 'string' ? "`$direction` ASC" : "`$column` " . strtoupper($direction)) . (array_key_last($orderByColumns) !== $column ? ' , ' : NULL);
-		$instance->statement .= !str_contains($instance->statement, ' ORDER BY ') ? " $orderByStatement" : '';
-		return $instance;
-	}
-	
-	public static function limit(int $limit)
-	{
-		$instance = self::__instantiate();
-		
-		if (!$instance->statement)
-			$instance->statement = '';
-		$instance->statement .= !str_contains($instance->statement, ' LIMIT ') ? " LIMIT $limit" : '';
-		return $instance;
-	}
-	
-	public static function offset(int $offset)
-	{
-		$instance = self::__instantiate();
-		
-		if (!$instance->statement)
-			$instance->statement = '';
-		$instance->statement .= !str_contains($instance->statement, ' OFFSET ') ? " OFFSET $offset" : '';
-		return $instance;
-	}
-	
-	public static function basicPaginate(int $perPage, ?int $page = 1, ?array $orderByColumns = ['id' => 'asc']):?XObject
-	{
-		$instance = self::__instantiate();
-		$page = max($page, 1);
-		$instance->orderBy($orderByColumns)->limit($perPage)->offset(($page - 1) * $perPage);
-		
-		$total_items = $instance->db->execute_query("SELECT COUNT(*) AS total FROM `$instance->table`")->fetch_object()->total ?? 0;
-		$total_pages = ceil($total_items / $perPage);
-		$pagination = new stdClass();
-		$data = xobject();
-		
-		$items = $instance->get();
-		$pagination->has_prev = $page > 1;
-		$pagination->has_next = $page < $total_pages;
-		$pagination->prev = $pagination->has_prev ? $page - 1 : NULL;
-		$pagination->next = $pagination->has_next ? $page + 1 : NULL;
-		$paginationDetails = compact('items', 'pagination', 'total_items', 'total_pages');
-		return $data->fromArray($paginationDetails);
-	}
-	
-	public static function first():mixed
-	{
-		$instance = self::__instantiate();
-		if ($instance->statement) {
-			$result = $instance->get();
-			return !empty($result) ? $result[0] : NULL;
-		}
-		return !empty($instance->all()) ? $instance->all()[0] : NULL;
-	}
-	
-	public static function toArray():array
-	{
-		$instance = self::__instantiate();
-		$final_result = [];
-		$result = !$instance->statement ? $instance->all() : $instance->get();
-		
-		foreach ($result as $key => $value)
-			$final_result[] = (array) $value->attributes;
-		return $final_result;
-	}
-	
-	public static function stackObject():XObject
-	{
-		$instance = self::__instantiate();
-		$final_result = xobject();
-		$result = !$instance->statement ? $instance->all() : $instance->get();
-		
-		foreach ($result as $key => $value)
-			$final_result->{$key} = xobject()::fromArray((array) $value->attributes);
-		return $final_result;
-	}
-	
-	public static function insert(array $attributes)
-	{
-		$instance = self::__instantiate();
-		try {
-			if (!empty($attributes))
-				$instance->statement = '';
-			else
-				throw new Exception('Empty SQL statement.');
-			
-			$instance->buildQuery('INSERT');
-			$statement = $instance->prepareInsertStatement($attributes);
-			
-			try {
-				$query = $instance->performQuery($statement);
-				
-				if (!$query)
-					return false;
-				return self::__instantiate()::where(['id' => $instance->db->insert_id])->first();
-			} catch (Exception $exception) {
-				return $exception;
-			}
-		} catch (Exception $exception) {
-			return $exception;
-		}
-	}
-	
-	public function delete():mysqli_result|Exception|bool
-	{
-		try {
-			if (!$this->statement) {
-				$primary_column = '';
-				$primary_value = NULL;
-				
-				foreach ($this->showTableColumnData() as $key => $column)
-					if ($column->Key === 'PRI') {
-						$primary_column = $column->Field;
-						break;
-					} else {
-						if (array_key_last($this->showTableColumnData()) === $key)
-							$primary_column = $this->showTableColumnData()[0]->Field;
-					}
-				foreach ($this->attributes as $column => $value)
-					if (strtolower($column) === strtolower($primary_column)) {
-						$primary_value = $value;
-							break;
-					}
-				$this->buildWhere([$primary_column => $primary_value], 'AND', '=');
-			}
-			$this->buildQuery('DELETE');
-			$this->statement = str_replace('{table}', "`$this->table`", $this->statement);
-			$query = $this->performQuery($this->statement);
-			if (!$this->db->affected_rows)
-				return false;
-			return $query;
-		} catch (Exception $exception) {
-			return $exception;
-		}
-	}
-	
 	public function update(array $attributes):mysqli_result|Exception|bool
 	{
 		try {
-			if (!$this->statement) {
-				$primary_column = '';
-				$primary_value = NULL;
-				
-				foreach ($this->showTableColumnData() as $key => $column)
-					if ($column->Key === 'PRI') {
-						$primary_column = $column->Field;
-						break;
-					} else {
-						if (array_key_last($this->showTableColumnData()) === $key)
-							$primary_column = $this->showTableColumnData()[0]->Field;
-					}
-				foreach ($this->attributes as $column => $value)
-					if (strtolower($column) === strtolower($primary_column)) {
-						$primary_value = $value;
-						break;
-					}
-				$this->buildWhere([$primary_column => $primary_value], 'AND', '=');
-			}
+			if (!$this->statement)
+				$this->buildStatement();
 			$this->buildQuery('UPDATE');
 			$query = $this->performUpdate($attributes);
 			if (!$this->db->affected_rows)
@@ -269,40 +242,31 @@ class Model
 		}
 	}
 	
-	public function count()
+	private function buildStatement()
 	{
-		$this->get();
-		return $this->count;
+		$primary_column = '';
+		$primary_value = NULL;
+		
+		foreach ($this->showTableColumnData() as $key => $column)
+			if ($column->Key === 'PRI') {
+				$primary_column = $column->Field;
+				break;
+			} else {
+				if (array_key_last($this->showTableColumnData()) === $key)
+					$primary_column = $this->showTableColumnData()[0]->Field;
+			}
+		foreach ($this->attributes as $column => $value)
+			if (strtolower($column) === strtolower($primary_column)) {
+				$primary_value = $value;
+				break;
+			}
+		$this->buildWhere([$primary_column => $primary_value], 'AND', '=');
 	}
 	
 	private function performGet($columns):array|string|null
 	{
 		$columnsToString = implode(', ', $columns);
 		return preg_replace("/\{table\}/", "`$this->table`", preg_replace("/\{columns\}/", $columnsToString, $this->statement));
-	}
-	
-	private function prepareInsertStatement($attributes):array|string
-	{
-		try {
-			return $this->validateInsert($attributes);
-		} catch (Exception $exception) {
-			return $exception;
-		}
-	}
-	
-	private function performUpdate($attributes):mysqli_result|bool
-	{
-		$pairCount = 0;
-		$column_value_pairs = '';
-		$attributeCount = count($attributes);
-		
-		foreach ($attributes as $column => $value) {
-			$pairCount++;
-			$column_value_pairs .= "`$column` = '$value'" . ($pairCount < $attributeCount ? ', ' : NULL);
-		}
-		
-		$statement = str_replace("{table}", "`$this->table`", str_replace("{column_value_pairs}", $column_value_pairs, $this->statement));
-		return $this->performQuery($statement);
 	}
 	
 	/**
@@ -322,6 +286,30 @@ class Model
 		} catch (mysqli_sql_exception $exception) {
 			$message = $exception->getMessage() . "<p>Query: $this->query</p>";
 			throw new mysqli_sql_exception($message);
+		}
+	}
+	
+	private function performUpdate($attributes):mysqli_result|bool
+	{
+		$pairCount = 0;
+		$column_value_pairs = '';
+		$attributeCount = count($attributes);
+		
+		foreach ($attributes as $column => $value) {
+			$pairCount++;
+			$column_value_pairs .= "`$column` = '$value'" . ($pairCount < $attributeCount ? ', ' : NULL);
+		}
+		
+		$statement = str_replace("{table}", "`$this->table`", str_replace("{column_value_pairs}", $column_value_pairs, $this->statement));
+		return $this->performQuery($statement);
+	}
+	
+	private function prepareInsertStatement($attributes):array|string
+	{
+		try {
+			return $this->validateInsert($attributes);
+		} catch (Exception $exception) {
+			return $exception;
 		}
 	}
 	
