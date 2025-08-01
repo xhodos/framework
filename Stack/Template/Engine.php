@@ -3,12 +3,22 @@ namespace Hodos\Stack\Template;
 
 use Closure;
 use Error;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use ReflectionClass;
+use ReflectionProperty;
+use RuntimeException;
 
 class Engine
 {
 	protected string $cachePath;
 	protected string $componentPath;
+	
+	protected static int $maxDepth = 30;
+	protected static int $renderDepth = 0;
+	
 	protected static ?array $directives = [];
+	protected static ?array $componentMap = [];
 	protected static ?Engine $instance = NULL;
 	
 	public function __construct(public string $view, public ?array $data = [], ?string $componentPath = NULL, ?string $cachePath = NULL)
@@ -18,13 +28,17 @@ class Engine
 		
 		$this->cachePath = correctDirPath($cachePath ?: getRootPath() . '/system/framework/cache/views');
 		$this->componentPath = correctDirPath($componentPath ?: getRootPath() . '/app/Components/Views');
+		$this->discoverComponents();
 	}
 	
 	public static function renderStatic(string $template, ?array $data = []):View
 	{
 		if (!self::$instance)
 			self::$instance = new static($template, $data);
-		return new View(self::$instance->make(), $data)->render();
+		// return new View(self::$instance->make(), $data)->render();
+		$view = new View(self::$instance->make(), $data);
+		self::$instance = NULL; // Free memory
+		return $view;
 	}
 	
 	public static function directive(string $name, callable $handler):void
@@ -32,7 +46,7 @@ class Engine
 		self::$directives[$name] = $handler;
 	}
 	
-	protected function make(): string
+	protected function make():string
 	{
 		$templateFile = $this->getViewFile();
 		$filename = str_replace(['/', '\\', '.'], '.', $this->view);
@@ -75,7 +89,7 @@ class Engine
 			$name = $match[1][0];
 			$content = trim($match[2][0]);
 			
-			$start = $match[0][1];
+			$start = (int) $match[0][1];
 			if ($start > $lastOffset) {
 				$intermediate = substr($templateContent, $lastOffset, $start - $lastOffset);
 				$floatingContent .= trim($intermediate);
@@ -85,7 +99,7 @@ class Engine
 			$floatingContent = trim($floatingContent . $content);
 			
 			$sections[$layout . $name] = $floatingContent;
-			$lastOffset = $match[0][1] + strlen($match[0][0]);
+			$lastOffset = $start + strlen($match[0][0]);
 		}
 		
 		if ($lastOffset < strlen($templateContent)) {
@@ -123,6 +137,63 @@ class Engine
 		return $this->processTemplate($this->yieldContent($compiledParent, $mergedSections, $layout));
 	}
 	
+	protected function discoverComponents():void
+	{
+		$baseLen = strlen($this->componentPath) + 1;
+		$iterator = new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator($this->componentPath)
+		);
+		
+		foreach ($iterator as $file) {
+			if ($file->getExtension() !== 'php') continue;
+			
+			$relPath = substr($file->getPathname(), $baseLen, -4); // Remove base and .php
+			$tag = strtolower(str_replace(DIRECTORY_SEPARATOR, '-', $relPath));
+			
+			$realPath = correctDirPath($file->getPathname());
+			$code = file_get_contents($realPath);
+			
+			$namespace = $this->extractNamespace($code);
+			$className = basename($realPath, '.php');
+			$fqn = "$namespace\\$className";
+			self::$componentMap[$tag] = $fqn;
+		}
+	}
+	
+	protected function renderComponent(string $tag, array $props, ?string $slot = NULL):string
+	{
+		if (self::$renderDepth++ > self::$maxDepth)
+			throw new RuntimeException("Component recursion too deep: <$tag>");
+		
+		$componentName = strtolower(str_replace('-', '', $tag));
+		
+		if (!isset(self::$componentMap[$componentName]))
+			return "<!-- Unknown component <$tag> -->";
+		
+		if (!empty($slot))
+			$props['slot'] = $slot;
+		
+		$componentClass = self::$componentMap[$componentName];
+		self::$renderDepth--; // Decrement after return
+		return "<?php $componentClass::make(" . var_export($props, true) . ")->output(); ?>";
+	}
+	
+	protected function extractNamespace(string $code):string
+	{
+		if (preg_match('/namespace\s+(.+);/', $code, $matches))
+			return trim($matches[1]);
+		return '';
+	}
+	
+	protected function parseAttributes(string $raw):array
+	{
+		$attrs = [];
+		preg_match_all('/(\w+)=(["\'])(.*?)\2/', $raw, $matches, PREG_SET_ORDER);
+		foreach ($matches as $match)
+			$attrs[$match[1]] = $match[3];
+		return $attrs;
+	}
+	
 	private function processTemplate(string $content):string
 	{
 		// Replace Template Comment
@@ -135,11 +206,19 @@ class Engine
 		$content = preg_replace_callback('/@method\s?\((.*?)\)/', fn ($match) => '<input type="hidden" name="_method" value="<?= ' . $match[1] . ' ?>">', $content);
 		
 		// Replace include
-		$content = preg_replace_callback('/@include\s?\(["\'](.*?)["\'](.*?)\)/', fn ($matches) => "<?= (" . __CLASS__ . "::renderStatic('$matches[1]', get_defined_vars())); ?>", $content);
+		// Match: @include('view', ['key' => 'value'])
+		/*$content = preg_replace_callback('/@include\s?\(["\'](.*?)["\'](.*?)\)/', fn ($matches) => "<?= (" . __CLASS__ . "::renderStatic('$matches[1]', get_defined_vars())); ?>", $content);*/
+		$content = preg_replace_callback('/@include\s?\(\s?[\'"](.*?)[\'"]\s?(?:,\s?(.*?))?\s?\)/', fn ($matches) => "<?= (" . __CLASS__ . "::renderStatic('$matches[1]', $matches[2] ?? get_defined_vars())); ?>", $content);
 		
 		// Replace Variables
 		$content = preg_replace_callback('/{!!\s?(.*?)\s?!!}/', fn ($match) => "<?= {$match[1]} ?>", $content);
-		$content = preg_replace_callback('/{{\s?(.*?)\s?}}/', fn ($match) => "<?= htmlspecialchars({$match[1]}) ?>", $content);
+		$content = preg_replace_callback('/{{\s?(.*?)\s?}}/', fn ($match) => $match[1] === '$slot' ? "<?= $match[1] ?>" : "<?= htmlspecialchars({$match[1]}) ?>", $content);
+		
+		// Replace Switch-Case
+		$content = preg_replace('/@switch\s*\((.*?)\)/', '<?php switch($1): ?>', $content);
+		$content = preg_replace('/@case\s*\((.*?)\)/', '<?php case $1: ?>', $content);
+		$content = str_replace('@default', '<?php default: ?>', $content);
+		$content = str_replace('@endswitch', '<?php endswitch; ?>', $content);
 		
 		// Replace break
 		$content = preg_replace_callback('/(@break(\s?\((.*?)\))?)/', fn ($matches) => (array_key_exists(3, $matches)) ? '<?php if(' . $matches[3] . '): ?>break;<?php endif; ?>' : '<?php break; ?>', $content);
@@ -164,15 +243,21 @@ class Engine
 		// Process custom directives
 		foreach (self::$directives as $name => $handler)
 			$content = preg_replace_callback("/@$name\\s*(\\((.*?)\\))?", fn ($matches) => $handler($matches[2] ?? ''), $content);
-		return $content;
-	}
-	
-	private function yieldContent($templateContent, $sections, $layout):string
-	{
-		// Replace @yield with section content
-		return preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($sections, $layout) {
-			return $sections[$layout . $match[1]] ?? '';
-		}, $templateContent);
+		
+		// Handle self-closing components like <x-alert ... />
+		$content = preg_replace_callback('/<hodos:([\w\-:]+)([^>]*?)\s*\/>/', function ($matches) {
+			$tag = $matches[1];
+			$attrs = $this->parseAttributes($matches[2]);
+			return $this->renderComponent($tag, $attrs, '');
+		}, $content);
+		
+		// Handle components with content <x-alert>...</x-alert>
+		return preg_replace_callback('/<hodos:([\w\-:]+)([^>]*)>(.*?)<\/hodos:\1>/s', function ($matches) {
+			$tag = $matches[1];
+			$attrs = $this->parseAttributes($matches[2]);
+			$slot = $matches[3];
+			return $this->renderComponent($tag, $attrs, $slot);
+		}, $content);
 	}
 	
 	private function getViewFile(?string $view = NULL):string
@@ -182,5 +267,13 @@ class Engine
 		$xsPath = correctDirPath(getRootPath() . "/$viewDir/$path.xs.php");
 		$phpPath = correctDirPath(getRootPath() . "/$viewDir/$path.php");
 		return file_exists($xsPath) ? $xsPath : (file_exists($phpPath) ? $phpPath : $xsPath);
+	}
+	
+	private function yieldContent($templateContent, $sections, $layout):string
+	{
+		// Replace @yield with section content
+		return preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($sections, $layout) {
+			return $sections[$layout . $match[1]] ?? '';
+		}, $templateContent);
 	}
 }

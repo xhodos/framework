@@ -7,7 +7,7 @@ use Hodos\Stack\XObject;
 class ValidatorResponse
 {
 	private static ?ValidatorResponse $instance = NULL;
-	public static ?XObject $errors;
+	public static ?XObject $errors = NULL;
 	
 	public function __construct(public Validator $validator)
 	{
@@ -28,6 +28,9 @@ class ValidatorResponse
 	
 	public function stackErrors(array $errors):void
 	{
+		if (!self::$errors)
+			self::$errors = new XObject();
+		
 		foreach ($errors as $key => $error) {
 			if (is_array($error))
 				foreach ($error as $value)

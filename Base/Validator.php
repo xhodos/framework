@@ -10,7 +10,7 @@ class Validator
 	private ?array $is_required = [];
 	private static ?Validator $instance = NULL;
 	
-	private function __construct()
+	public function __construct()
 	{
 		if (!self::$instance || (self::$instance && (strtolower(get_class(self::$instance)) !== get_class($this))))
 			self::$instance = $this;
@@ -136,6 +136,11 @@ class Validator
 				array_splice($this->errorBag->$field, 1, $errorCount - 1);
 			}
 		}
+	}
+	
+	public static function getErrorBag():?XObject
+	{
+		return self::$instance->errorBag ?? NULL;
 	}
 	
 	private function maxLength(array $fields, int $length):void

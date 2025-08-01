@@ -26,7 +26,7 @@ class Router extends Request
 	
 	public function __construct(public mixed $routeInfo)
 	{
-		// parent::__construct($routeInfo);
+		parent::__construct($routeInfo);
 		
 		$exists = false;
 		$build_request = $this->init($routeInfo);
@@ -149,7 +149,11 @@ class Router extends Request
 						}
 						
 						foreach ($request_parameters as $key => $value)
-							$parameters->$key = match ($value) {'true' => true, 'false' => false, default => $value};
+							$parameters->$key = match ($value) {
+								'true' => true,
+								'false' => false,
+								default => $value
+							};
 						
 						foreach ($parameters as $key => $value)
 							$build_parameters[$key] = $value;

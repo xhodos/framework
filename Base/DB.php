@@ -9,20 +9,20 @@ final class DB
 {
 	public ?mysqli $connection;
 	
-	private static $instance;
+	private static ?self $instance = NULL;
 	
 	private function __construct()
 	{
 	}
 	
-	public static function __instance(): self
+	public static function __instance():self
 	{
 		if (!self::$instance)
 			self::$instance = new self;
 		return self::$instance->config();
 	}
 	
-	private function config()
+	private function config():?DB
 	{
 		try {
 			$env = strtoupper(env('APP_ENV'));

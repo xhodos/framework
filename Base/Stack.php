@@ -3,6 +3,7 @@
 namespace Hodos\Base;
 
 use Exception;
+use Hodos\Stack\Template\View;
 use ReflectionException;
 use ReflectionMethod;
 use ReflectionFunction;
@@ -53,8 +54,10 @@ final class Stack
 		$args = Route::router()->getFuncArgs($build, $method);
 		$build->route->current = true;
 		Route::$routeMatched = true;
+		$result = (call_user_func_array(is_array($route_action) ? [$controller, $route_action[1]] : $route_action, $args));
 		
-		if (!call_user_func_array(is_array($route_action) ? [$controller, $route_action[1]] : $route_action, $args))
+		// Auto-handle view or string response
+		if (!self::$instance->sendResponse($result))
 			self::$instance->reject();
 		// ValidatorResponse::unstackErrors();
 		return $args;
@@ -76,5 +79,17 @@ final class Stack
 			dd("Current URI does not match any routes.");
 		}
 		return false;
+	}
+	
+	public static function sendResponse($value):bool
+	{
+		if ($value instanceof View || is_string($value)) {
+			echo $value;
+		} elseif (is_array($value)) {
+			header('Content-Type: application/json');
+			echo json_encode($value);
+		}
+		// ... add more as you need (redirects, responses, etc.)
+		return !!$value;
 	}
 }

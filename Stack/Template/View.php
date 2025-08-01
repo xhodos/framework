@@ -1,16 +1,28 @@
 <?php
 namespace Hodos\Stack\Template;
 
+use RuntimeException;
+use Throwable;
+
 class View
 {
 	public function __construct(public string $view, public array $params = [])
 	{
 	}
 	
-	public function render(bool $silent = false, $output = 'php://output'): self|string
+	public function __toString():string
+	{
+		try {
+			return $this->render(true); // Silent, returns as string
+		} catch (Throwable $e) {
+			return "View error: " . $e->getMessage();
+		}
+	}
+	
+	public function render(bool $silent = false, $output = 'php://output'):self|string
 	{
 		if (!file_exists($this->view))
-			throw new \RuntimeException("View file {$this->view} not found.");
+			throw new RuntimeException("View file {$this->view} not found.");
 		
 		if (!empty($this->params))
 			extract($this->params, EXTR_SKIP);
@@ -28,7 +40,14 @@ class View
 			fwrite($stream, $content);
 			fclose($stream);
 		} else
-			throw new \RuntimeException("Could not open output stream: $output");
+			throw new RuntimeException("Could not open output stream: $output");
 		return $this;
 	}
+	
+	public function setParams(array $data):self
+	{
+		$this->params = array_merge($this->params, $data);
+		return $this;
+	}
+	
 }

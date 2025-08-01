@@ -3,6 +3,7 @@
 use Hodos\Base\Dir;
 use Hodos\Base\Route;
 use Hodos\Base\Router;
+use Hodos\Base\Validator;
 use Hodos\Base\ValidatorResponse;
 use Hodos\Stack\Errors\ViewError;
 use Hodos\Stack\Template\Engine;
@@ -11,6 +12,14 @@ use Hodos\Stack\XObject;
 
 $getBaseRequestURI = fn (int $offset) => implode('/', array_slice(explode('/', REQUEST_URI), $offset));
 $getBaseURI = fn (int $index) => explode('/', REQUEST_URI)[$index];
+
+function errorBag(?string $key = NULL)
+{
+	$error_bag = Validator::getErrorBag();
+	if ($key)
+		return $error_bag->get($key);
+	return $error_bag;
+}
 
 if (!function_exists('asset')) {
 	function asset($path):string
@@ -207,7 +216,7 @@ if (!function_exists('useDirectorySeparator')) {
 }
 
 if (!function_exists('view')) {
-	function view(string $view, ?array $data = []): View
+	function view(string $view, ?array $data = []):View
 	{
 		$path_construct = constructViewFilePath($view);
 		$path = correctDirPath(env('APP_VIEWS_DIR', 'views') . '/' . $path_construct);

@@ -16,7 +16,7 @@ class Request
 	
 	protected ?string $request_uri = BASE_REQUEST_URI;
 	
-	protected function __construct(public string $method)
+	protected function __construct(public mixed $method)
 	{
 	}
 	

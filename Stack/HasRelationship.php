@@ -7,25 +7,25 @@ use Exception;
 
 trait HasRelationship
 {
-	public function belongsTo(string $model, $localKey = NULL, $foreignKey = 'id')
+	protected function belongsTo(string $model, $localKey = NULL, $foreignKey = 'id')
 	{
 		$belongs = $this->belongs($model, $localKey, $foreignKey);
 		return $belongs ? $this->getRelationship($belongs) : NULL;
 	}
 	
-	public function hasOne(string $model, $foreignKey = NULL, $localKey = 'id')
+	protected function hasOne(string $model, $foreignKey = NULL, $localKey = 'id')
 	{
 		$has = $this->has($model, $foreignKey, $localKey);
 		return $has ? $this->getRelationship($has) : NULL;
 	}
 	
-	public function belongsToMany(string $model, $localKey = NULL, $foreignKey = 'id')
+	protected function belongsToMany(string $model, $localKey = NULL, $foreignKey = 'id')
 	{
 		$belongs = $this->belongs($model, $localKey, $foreignKey);
 		return $belongs ? $this->getRelationship($belongs, true) : NULL;
 	}
 	
-	public function hasMany(string $model, $foreignKey = NULL, $localKey = 'id')
+	protected function hasMany(string $model, $foreignKey = NULL, $localKey = 'id')
 	{
 		$has = $this->has($model, $foreignKey, $localKey);
 		return $has ? $this->getRelationship($has, true) : NULL;

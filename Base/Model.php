@@ -7,6 +7,7 @@ use Hodos\Stack\XObject;
 use mysqli;
 use mysqli_result;
 use mysqli_sql_exception;
+use ReflectionClass;
 use stdClass;
 use Hodos\Stack\BuildQuery;
 use Hodos\Stack\Grammar;
@@ -16,7 +17,7 @@ class Model
 {
 	use BuildQuery, HasRelationship;
 	
-	public $attributes;
+	public ?XObject $attributes;
 	
 	protected $columns = [];
 	
@@ -28,15 +29,17 @@ class Model
 	
 	protected $table;
 	
-	private $original;
+	private ?XObject $original;
 	
 	private int $count;
+	
+	private $selected = [];
 	
 	private ?string $statement = NULL;
 	
 	private array $queryStack = [];
 	
-	protected array $operators = [
+	private array $operators = [
 		'comparison' => [],
 		'logical' => [],
 	];
@@ -99,6 +102,7 @@ class Model
 	public static function first():mixed
 	{
 		$instance = self::__instantiate();
+		
 		if ($instance->statement) {
 			$result = $instance->get();
 			return !empty($result) ? $result[0] : NULL;
@@ -208,23 +212,21 @@ class Model
 				$result[] = $row;
 			$temp_result = $result;
 			
-			foreach ($temp_result as $i => $values) {
+			foreach ($temp_result as $key => $values) {
 				$instance = new $this;
-				$result[$i] = $instance;
-				$instance->original = $values;
-				$instance->attributes = new stdClass();
-				
-				foreach ($values as $j => $value)
-					if (!in_array($j, $this->hidden)) {
-						$instance->$j = $value;
-						$instance->attributes->$j = $value;
-					}
+				$result[$key] = $instance;
+				$this->buildSingleInstance($instance, $statement, $values);
 			}
 			unset($temp_result);
 			return $result;
 		} catch (Exception $exception) {
 			dd($exception->getMessage(), $exception->getTrace());
 		}
+	}
+	
+	public function getSelected():array
+	{
+		return $this->selected;
 	}
 	
 	public function update(array $attributes):mysqli_result|Exception|bool
@@ -242,13 +244,39 @@ class Model
 		}
 	}
 	
-	private function buildStatement()
+	private function buildSingleInstance(self $instance, string $statement, object $values):void
+	{
+		$instance->columns = $this->columns;
+		$instance->db = $this->db;
+		$instance->hidden = $this->hidden;
+		$instance->operators = $this->operators;
+		$instance->query = $this->query;
+		$instance->queryStack = $this->queryStack;
+		$instance->statement = $statement;
+		
+		$instance->original = xobject();
+		$instance->attributes = xobject();
+		
+		foreach ($values as $j => $value) {
+			foreach ($instance->columns as $column)
+				if ($column === $j)
+					$instance->selected[$column] = $value;
+			
+			if (!in_array($j, $this->hidden)) {
+				$instance->{$j} = $value;
+				$instance->attributes->{$j} = $value;
+			}
+			$instance->original->{$j} = $value;
+		}
+	}
+	
+	private function buildStatement():void
 	{
 		$primary_column = '';
 		$primary_value = NULL;
 		
 		foreach ($this->showTableColumnData() as $key => $column)
-			if ($column->Key === 'PRI') {
+			if (strtoupper($column->Key) === 'PRI') {
 				$primary_column = $column->Field;
 				break;
 			} else {
@@ -280,8 +308,11 @@ class Model
 	{
 		$this->statement = NULL;
 		$this->query = $statement;
+		$instanceReflection = new ReflectionClass($this);
 		
 		try {
+			if ($instanceReflection->hasMethod('isTrashed'))
+				$this->query = $instanceReflection->getMethod('isTrashed')->invoke($this) ? $this->query : str_replace('WHERE', "WHERE `$this->softDeleteColumn` IS NULL AND", $this->query);
 			return $this->db->execute_query($this->query);
 		} catch (mysqli_sql_exception $exception) {
 			$message = $exception->getMessage() . "<p>Query: $this->query</p>";

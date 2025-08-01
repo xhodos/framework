@@ -29,7 +29,7 @@ use Countable;
 	public static function add($key, $value)
 	{
 		$instance = self::$instance;
-		if (!property_exists($instance, $key))
+		if (!$instance->has($key))
 			$instance->$key = $value;
 		// return $instance;
 	}
@@ -38,7 +38,7 @@ use Countable;
 	{
 		$instance = self::$instance;
 		foreach ($datum as $key => $data)
-			if (!property_exists($instance, $key))
+			if (!$instance->has($key))
 				$instance->$key = $data;
 		return $instance;
 	}
@@ -57,8 +57,15 @@ use Countable;
 	public static function get(string $key)
 	{
 		$instance = self::$instance;
+		return $instance->has($key) ? $instance->$key : NULL;
+	}
+	
+	public static function has(string $key):bool
+	{
+		$instance = self::$instance;
 		if ($instance->$key)
-			return $instance->$key;
+			return true;
+		return false;
 	}
 	
 	public static function delete(string $key):void
