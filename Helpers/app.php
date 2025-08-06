@@ -13,6 +13,16 @@ use Hodos\Stack\XObject;
 $getBaseRequestURI = fn (int $offset) => implode('/', array_slice(explode('/', REQUEST_URI), $offset));
 $getBaseURI = fn (int $index) => explode('/', REQUEST_URI)[$index];
 
+use Hodos\Stack\Support\Cache;
+
+function cache():Cache
+{
+	static $cache = NULL;
+	if (!$cache)
+		$cache = new Cache();
+	return $cache;
+}
+
 function errorBag(?string $key = NULL)
 {
 	$error_bag = Validator::getErrorBag();
@@ -159,10 +169,10 @@ if (!function_exists('getUnderscoredName')) {
 }
 
 if (!function_exists('getViewFile')) {
-	function getViewFile($file):string
+	function getViewFile($file, $ext = '.php'):string
 	{
 		$path = env('APP_VIEWS_DIR', 'views') . '/' . $file;
-		return correctDirPath(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
+		return correctDirPath(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . ".$ext");
 	}
 }
 
@@ -180,6 +190,22 @@ if (!function_exists('loadFile')) {
 		return false;
 	}
 }
+
+/*if (!function_exists('parseArrayString')) {
+	function parseArrayString(string $arrayString):array
+	{
+		$result = [];
+		$arrayString = trim($arrayString, "[]");
+		
+		preg_match_all('/([\'"])(.*?)\1\s*=>\s*([\'"]?)(.*?)\3/', $arrayString, $matches, PREG_SET_ORDER);
+		foreach ($matches as $match) {
+			$key = $match[2];
+			$value = $match[4];
+			$result[$key] = $value;
+		}
+		return $result;
+	}
+}*/
 
 if (!function_exists('request')) {
 	/**
@@ -218,13 +244,7 @@ if (!function_exists('useDirectorySeparator')) {
 if (!function_exists('view')) {
 	function view(string $view, ?array $data = []):View
 	{
-		$path_construct = constructViewFilePath($view);
-		$path = correctDirPath(env('APP_VIEWS_DIR', 'views') . '/' . $path_construct);
-		
-		if (is_readable(ROOT . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.xs.php'))
-			return Engine::renderStatic($view, $data);
-		else
-			dd(new ViewError('View ' . $view . ' not found', 404));
+		return Engine::renderStatic($view, $data);
 	}
 }
 

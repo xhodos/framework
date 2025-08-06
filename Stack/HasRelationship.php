@@ -38,7 +38,7 @@ trait HasRelationship
 			$this->checkKeys($this, $relatedClass, $localKey);
 			
 			if (empty($this->$localKey))
-				throw new Error("Unknown column: $localKey; in table $this->table", 1);
+				dd(new Error("Unknown column: $localKey; in table $this->table", 1));
 			return $relatedClass::where([$foreignKey => $this->$localKey]);
 		}
 		return false;
@@ -51,7 +51,7 @@ trait HasRelationship
 			$this->checkKeys($relatedClass, $this, $foreignKey);
 			
 			if (empty($this->$localKey))
-				throw new Error("Unknown column: $localKey; in table $this->table", 1);
+				dd(new Error("Unknown column: $localKey; in table $this->table", 1));
 			return $relatedClass::where([$foreignKey => $this->$localKey]);
 		}
 		return false;
@@ -82,6 +82,6 @@ trait HasRelationship
 				break;
 			}
 		if (!$foreignKeyExists)
-			throw new Error("Unknown column: $key; in table $relatedClass->table", 1);
+			dd(new Error("Unknown column: $key; in table $relatedClass->table", 1));
 	}
 }

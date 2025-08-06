@@ -2,6 +2,7 @@
 
 namespace Hodos\Base;
 
+use Error;
 use Exception;
 use ReflectionClass;
 use ReflectionFunction;
@@ -131,9 +132,13 @@ class Router extends Request
 				
 				if ($total_matched === count($_current_uri_exploded))
 					if (strtolower($_SERVER['REQUEST_METHOD']) === 'head' || strtolower($routeInfo->method) === 'any' || strtolower($routeInfo->method) === strtolower($_SERVER['REQUEST_METHOD']) || strtolower($_SERVER['REQUEST_METHOD']) === 'post' && isset($_POST['_method']) && strtolower($routeInfo->method) === strtolower($_POST['_method'])) {
+						if (!self::validate_csrf_token()) {
+							http_response_code(419);
+							dd("Invalid CSRF Token.");
+						}
+						
 						$build_parameters = [];
 						$parameters = new XObject();
-						$api_methods = ['put', 'patch', 'delete'];
 						$request_parameters = strtolower($routeInfo->method) === 'get' ? $_REQUEST : array_merge($_REQUEST, $_FILES);
 						
 						if (preg_match_all($param_exp, $this->route_uri, $matches)) {
@@ -173,5 +178,16 @@ class Router extends Request
 		} else
 			throw new Exception("The route action requires either an array or a closure.", 1);
 		return false;
+	}
+	
+	protected static function validate_csrf_token():bool
+	{
+		if (strtolower($_SERVER['REQUEST_METHOD']) === 'post') {
+			$token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? NULL);
+			
+			if (!($token && hash_equals($_SESSION['_csrf_token'] ?? '', $token)))
+				return false;
+		}
+		return true;
 	}
 }

@@ -19,7 +19,7 @@ else
 				$data = json_decode($composerJson);
 				
 				if (json_last_error() !== JSON_ERROR_NONE)
-					throw new RuntimeException("Invalid JSON: " . json_last_error_msg());
+					dd(new RuntimeException("Invalid JSON: " . json_last_error_msg()));
 				
 				$autoload = $data->autoload;
 				$psr0 = $autoload->{'psr-0'} ?? NULL;

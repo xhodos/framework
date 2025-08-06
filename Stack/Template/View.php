@@ -22,7 +22,7 @@ class View
 	public function render(bool $silent = false, $output = 'php://output'):self|string
 	{
 		if (!file_exists($this->view))
-			throw new RuntimeException("View file {$this->view} not found.");
+			dd(new RuntimeException("View file $this->view not found."));
 		
 		if (!empty($this->params))
 			extract($this->params, EXTR_SKIP);
@@ -40,7 +40,7 @@ class View
 			fwrite($stream, $content);
 			fclose($stream);
 		} else
-			throw new RuntimeException("Could not open output stream: $output");
+			dd(new RuntimeException("Could not open output stream: $output"));
 		return $this;
 	}
 	

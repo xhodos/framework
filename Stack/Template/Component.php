@@ -1,49 +1,75 @@
 <?php
 namespace Hodos\Stack\Template;
 
-use http\Exception\RuntimeException;
 use ReflectionClass;
+use ReflectionException;
+use ReflectionMethod;
 use ReflectionProperty;
+use RuntimeException;
 
 abstract class Component
 {
 	public string $slot = '';
-	
-	protected static ?self $instance = NULL;
 	protected array $data = [];
+	
+	protected static int $maxDepth = 1;
+	protected static int $renderDepth = 0;
 	
 	abstract public function render():View|string;
 	
 	public static function make(array $params = []):static
 	{
 		$instance = new static();
-		// $instance->data = $params ? $params[0] : [];
 		$instance->setProps($params);
 		return $instance;
 	}
 	
-	public function output():View|string
+	public function output()
 	{
-		$componentReflection = new ReflectionClass($this);
-		$user_defined_properties = $componentReflection->getProperties(ReflectionProperty::IS_PUBLIC);
+		$cacheKey = $this->generateCacheKey();
+		if ($cached = cache()->get($cacheKey))
+			return $cached;
+		$view = $this->render();
 		
-		foreach ($user_defined_properties as $property)
-			$this->data[$property->getName()] = $property->getValue($this);
-		$rendered = $this->render();
+		if ($view instanceof View)
+			$view->params = array_merge($this->collectPublicProperties(), $view->params ?? []);
 		
-		if (!($rendered instanceof View))
-			// Inject the data automatically
-			throw new RuntimeException('');
-		// $rendered->params = array_merge($this->data, $rendered->params ?? []);
-		$rendered->params = array_merge($this->data, $rendered->params);
-		return $rendered->render();
+		if (!is_string($view) && !($view instanceof View))
+			dd(new RuntimeException("Component::render() must return string or instance of View."));
+		cache()->set($cacheKey, $view);
+		return $view;
+	}
+	
+	public function withSlot(string $content):static
+	{
+		$this->slot = $content;
+		return $this;
+	}
+	
+	protected function generateCacheKey():string
+	{
+		$class = static::class;
+		$data = $this->collectPublicProperties();
+		$hash = md5($class . serialize($data));
+		return "component_cache_$hash";
 	}
 	
 	protected function setProps(array $props):void
 	{
-		foreach ($props as $key => $value) {
+		foreach ($props as $key => $value)
 			if (property_exists($this, $key))
-				$this->{$key} = $value;
-		}
+				$this->$key = $value;
+			else
+				$this->data[$key] = $value;
+	}
+	
+	protected function collectPublicProperties():array
+	{
+		$reflection = new ReflectionClass($this);
+		$props = [];
+		
+		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $prop)
+			$props[$prop->getName()] = $prop->getValue($this);
+		return array_merge($props, $this->data);
 	}
 }
