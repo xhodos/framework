@@ -15,12 +15,15 @@ class Engine
 	protected string $cachePath;
 	protected string $componentPath;
 	
-	protected static int $maxDepth = 99;
+	protected static int $maxDepth = 30;
 	protected static int $renderDepth = 0;
 	
 	protected static ?array $directives = [];
 	protected static ?array $componentMap = [];
 	protected static ?Engine $instance = NULL;
+	
+	protected array $sections = [];
+	protected array $stacks = [];
 	
 	public function __construct(public string $view, public ?array $data = [], public ?string $templateType = 'view', ?string $componentPath = NULL, ?string $cachePath = NULL)
 	{
@@ -62,92 +65,121 @@ class Engine
 			dd(new Error(mb_convert_case($this->templateType, MB_CASE_TITLE) . " $filename not found"));
 		
 		if (!file_exists($cacheFile) || filemtime($cacheFile) < filemtime($templateFile)) {
-			if (!is_dir(dirname($cacheFile)))
+			if (!is_dir(dirname($cacheFile))) {
 				mkdir(dirname($cacheFile), 0777, true);
-			
-			$templateContent = file_get_contents($templateFile);
-			[$layout, $sections] = $this->resolveExtendsAndSections($templateContent);
-			$compiled = $this->compileLayoutChain($layout, $sections);
+			}
+			$compiled = $this->compileLayoutChain($templateFile);
 			file_put_contents($cacheFile, $compiled);
 		}
 		return $cacheFile;
 	}
 	
-	private function resolveExtendsAndSections(string $templateContent):array
+	private function compileLayoutChain(string $viewFile):string
 	{
-		$layout = NULL;
-		$sections = [];
-		$floatingContent = '';
+		$chain = [];
+		$content = file_get_contents($viewFile);
+		$chain[] = $content;
 		
-		if (preg_match('/@extends\s?\(["\'](.*?)["\']\)/', $templateContent, $extendMatch)) {
-			$layout = $extendMatch[1];
-			$templateContent = str_replace($extendMatch[0], '', $templateContent);
+		while (preg_match('/@extends\s*\(\s*[\'\"]([^\'\"]+)[\'\"]\s*\)/', $content, $matches)) {
+			$parent = $matches[1];
+			$content = preg_replace('/@extends\s*\(\s*[\'\"]([^\'\"]+)[\'\"]\s*\)/', '', $content);
+			$this->extractSectionsAndStacks($content);
+			$viewFile = $this->getViewFile($parent);
+			$content = file_get_contents($viewFile);
+			$chain[] = $content;
 		}
-		preg_match_all('/@section\s?\(["\'](.*?)["\']\)(.*?)@endsection/s', $templateContent, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+		
+		$this->extractSectionsAndStacks($content);
+		
+		// Inject from base layout upward
+		$base = array_pop($chain);
+		while ($part = array_pop($chain)) {
+			$base = $this->injectSectionsAndStacks($base);
+		}
+		return $this->processTemplate($this->injectSectionsAndStacks($base));
+	}
+	
+	protected function extractFloatingContent(string $content):string
+	{
+		// First, strip known structured blocks before searching for floating content
+		$cleaned = $content;
+		
+		// Remove all @section blocks
+		$cleaned = preg_replace('/@section\s*\(\s*[\'"](.+?)[\'"]\s*\)(.*?)@endsection/s', '', $cleaned);
+		
+		// Remove all @push blocks
+		$cleaned = preg_replace('/@push\s*\(\s*[\'"](.+?)[\'"]\s*\)(.*?)@endpush/s', '', $cleaned);
+		
+		// Remove all @prepend blocks
+		$cleaned = preg_replace('/@prepend\s*\(\s*[\'"](.+?)[\'"]\s*\)(.*?)@endprepend/s', '', $cleaned);
+		
+		// Remove any @extends and @yield lines (they're not floating content)
+		$cleaned = preg_replace('/@extends\s*\(\s*[\'"].+?[\'"]\s*\)/', '', $cleaned);
+		$cleaned = preg_replace('/@yield\s*\(\s*[\'"].+?[\'"]\s*\)/', '', $cleaned);
+		
+		// The remaining content is what floats outside any known blocks
+		return trim($cleaned);
+	}
+	
+	private function extractSectionsAndStacks(string $content):void
+	{
+		preg_match_all('/@section\s*\(\s*[\'"](.*?)[\'"]\s*\)(.*?)@endsection/s', $content, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
 		
 		$lastOffset = 0;
-		foreach ($matches as $match) {
+		foreach ($matches as $key => $match) {
 			$name = $match[1][0];
-			$content = trim($match[2][0]);
+			$body = $match[2][0];
+			$cleaned = str_replace($match[0][0], '', $content);
+			if (str_contains($body, '@parent') && isset($this->sections[$name])) {
+				$body = str_replace('@parent', $this->sections[$name], $body);
+			}
 			
 			$start = (int) $match[0][1];
 			if ($start > $lastOffset) {
-				$intermediate = substr($templateContent, $lastOffset, $start - $lastOffset);
-				$floatingContent .= trim($intermediate);
+				$intermediate = $this->extractFloatingContent(substr($content, $lastOffset, $start - $lastOffset));
+				$lastOffset = $start + strlen($match[0][0]);
 			}
-			
-			$templateContent = '';
-			$floatingContent = trim($floatingContent . $content);
-			
-			$sections[$layout . $name] = $floatingContent;
-			$lastOffset = $start + strlen($match[0][0]);
+			$this->sections[$name] = !empty($intermediate) ? "$intermediate\n" . $body : $body;
 		}
 		
-		if ($lastOffset < strlen($templateContent))
-			$floatingContent .= trim(substr($templateContent, $lastOffset));
-		
-		if (!empty(trim($templateContent)) && !isset($sections['content']))
-			$sections['content'] = $floatingContent;
-		
-		return [$layout, $sections];
+		preg_match_all('/@(push|prepend)\s*\(\s*[\'"](.*?)[\'"]\s*\)(.*?)@end(push|prepend)/s', $content, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+		foreach ($matches as $match) {
+			$type = $match[1][0];
+			$name = $match[2][0];
+			$body = $match[3][0];
+			if (!isset($this->stacks[$name])) $this->stacks[$name] = [];
+			if ($type === 'prepend') {
+				array_unshift($this->stacks[$name], $body);
+			} else {
+				$this->stacks[$name][] = $body;
+			}
+		}
 	}
 	
-	
-	private function compileLayoutChain(?string $layout, array $sections):string
+	private function injectSectionsAndStacks(string $content):string
 	{
-		// No layout? Just process the current sections
-		if (!$layout)
-			return $this->processTemplate($sections['content'] ?? '');
-		$layoutFile = $this->getViewFile($layout);
+		$content = preg_replace_callback('/@yield\s*\(\s*[\'"](.*?)[\'"]\s*\)/', function ($match) {
+			$name = $match[1];
+			return $this->sections[$name] ?? '';
+		}, $content);
 		
-		if (!is_readable($layoutFile))
-			dd(new Error("Layout view $layout not found"));
-		$layoutContent = file_get_contents($layoutFile);
-		
-		// Check if the layout extends another
-		[$parentLayout, $parentSections] = $this->resolveExtendsAndSections($layoutContent);
-		
-		// Merge child into parent (child takes priority)
-		$mergedSections = array_merge($parentSections, $sections);
-		
-		// Recursively go all the way up the chain (Check if the layout extends another)
-		$compiledParent = $this->compileLayoutChain($parentLayout, $mergedSections);
-		
-		// Now process @yield for this layout level
-		return $this->processTemplate($this->yieldContent($compiledParent, $mergedSections, $layout));
+		$content = preg_replace_callback('/@stack\s*\(\s*[\'"](.*?)[\'"]\s*\)/', function ($match) {
+			$name = $match[1];
+			return isset($this->stacks[$name]) ? implode(PHP_EOL, $this->stacks[$name]) : '';
+		}, $content);
+		return $content;
 	}
 	
+	// Component discovery
 	protected function discoverComponents():void
 	{
 		$baseLen = strlen($this->componentPath) + 1;
-		$iterator = new RecursiveIteratorIterator(
-			new RecursiveDirectoryIterator($this->componentPath)
-		);
+		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->componentPath));
 		
 		foreach ($iterator as $file) {
 			if ($file->getExtension() !== 'php') continue;
 			
-			$relPath = substr($file->getPathname(), $baseLen, -4); // Remove base and .php
+			$relPath = substr($file->getPathname(), $baseLen, -4);
 			$tag = strtolower(str_replace(DIRECTORY_SEPARATOR, '-', $relPath));
 			
 			$realPath = correctDirPath($file->getPathname());
@@ -155,8 +187,7 @@ class Engine
 			
 			$namespace = $this->extractNamespace($code);
 			$className = basename($realPath, '.php');
-			$fqn = "$namespace\\$className";
-			self::$componentMap[$tag] = $fqn;
+			self::$componentMap[$tag] = "$namespace\\$className";
 		}
 	}
 	
@@ -173,11 +204,9 @@ class Engine
 		$componentClass = self::$componentMap[$componentName];
 		$props = var_export(array_merge($props, ['slot' => '__SLOT__']), true);
 		
-		
 		self::$renderDepth--;
 		return "<?php ob_start() ?>$slot<?php \$__slot = ob_get_clean() ?><?= $componentClass::make($props)->withSlot(\$__slot)->output(); ?>";
 	}
-	
 	
 	protected function extractNamespace(string $code):string
 	{
@@ -186,12 +215,12 @@ class Engine
 		return '';
 	}
 	
-	protected function parseAttributes(string $raw):array
+	protected function parseAttributes(string $raw): array
 	{
 		$attrs = [];
-		preg_match_all('/(\w+)=(["\'])(.*?)\2/', $raw, $matches, PREG_SET_ORDER);
+		preg_match_all('/(\w+)(=(["\'])(.*?)\3)?/', $raw, $matches, PREG_SET_ORDER);
 		foreach ($matches as $match)
-			$attrs[$match[1]] = $match[3];
+			$attrs[$match[1]] = $match[4] ?? true;
 		return $attrs;
 	}
 	
@@ -228,19 +257,10 @@ class Engine
 	
 	private function getViewFile(?string $view = NULL):string
 	{
-		$viewDir = env('APP_VIEWS_DIR', 'views');
-		
 		$path = constructViewFilePath($view ?? $this->view);
+		$viewDir = env('APP_VIEWS_DIR', 'views');
 		$xsPath = correctDirPath(getRootPath() . "/$viewDir/$path.xs.php");
 		$phpPath = correctDirPath(getRootPath() . "/$viewDir/$path.php");
 		return file_exists($xsPath) ? $xsPath : (file_exists($phpPath) ? $phpPath : $xsPath);
-	}
-	
-	private function yieldContent($templateContent, $sections, $layout):string
-	{
-		// Replace @yield with section content
-		return preg_replace_callback('/@yield\s?\(["\'](.*?)["\']\)/', function ($match) use ($sections, $layout) {
-			return $sections[$layout . $match[1]] ?? '';
-		}, $templateContent);
 	}
 }

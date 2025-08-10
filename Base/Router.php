@@ -51,6 +51,7 @@ class Router extends Request
 			
 			
 			if ($build_request) {
+				$build_request->isAjax = array_key_exists('HTTP_X_REQUESTED_WITH', $build_request->request->server) && strtolower($build_request->request->server['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 				self::$stack['stack-info'] = $build_request;
 				self::$stack['route-info'] = $routeInfo;
 			}
@@ -98,12 +99,13 @@ class Router extends Request
 				if (!empty($build_request->request->$argument_name)) {
 					$model_id = $build_request->request->$argument_name;
 					$results = $args[$argument_name]::where(['id' => $model_id])->get();
+					// TODO: A better way to handle trashed model id's // dd((new ReflectionClass($args[$argument_name])), $args[$argument_name]::withTrashed()->where(['id' => $model_id])->get(), $model_id);
 					
 					if (!empty($results))
 						foreach ($results[0] as $key => $value)
 							$args[$argument_name]->$key = $value;
 					else
-						throw new Exception("Unable to find id: $model_id in Table: " . $args[$argument_name]->getTable(), 1);
+						dd(new Exception("Unable to find id: $model_id in Table: " . $args[$argument_name]->getTable(), 1));
 				}
 			}
 		}

@@ -78,6 +78,7 @@ trait BuildQuery
 		if (!$this->statement)
 			$this->statement = "WHERE";
 		
+		$count = 0;
 		$queryStack = '';
 		$queryCount = count($queries);
 		
@@ -88,14 +89,15 @@ trait BuildQuery
 				$this->statement .= " ";
 			$comp = $comparator === '=' || $comparator === '!=' ? (!is_null($value) ? $comparator : ($comparator === '!=' ? "IS NOT" : "IS")) : $comparator;
 			$val = $comparator === '=' || $comparator === '!=' ? (!is_null($value) ? (is_numeric($value) || is_bool($value) ? (is_bool($value) ? (int) $value : $value) : "'$value'") : "NULL") : $value;
-			$queryStack .= "`$key` $comp $val";
-			$this->statement .= "`$key` $comp " . $val . ($key < ($queryCount - 1) ? " $operator" : NULL);
+			$queryStack .= "`$key` $comp $val" . ($count < ($queryCount - 1) ? " $operator " : NULL);
+			$this->statement .= "`$key` $comp " . $val . ($count < ($queryCount - 1) ? " $operator" : NULL);
 			
 			if (!in_array($key, $this->columns))
 				$this->columns[] = $key;
+			$count++;
 		}
 		$this->query = $this->statement;
-		$this->queryStack[] = $queryStack;
+		$this->queryStack[] = (!empty($this->queryStack) ? "$operator " : NULL) . "$queryStack";
 		$this->buildOperators($comparator, $operator);
 	}
 	

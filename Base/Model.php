@@ -13,6 +13,7 @@ use Hodos\Stack\BuildQuery;
 use Hodos\Stack\Grammar;
 use Hodos\Stack\HasRelationship;
 
+#[\AllowDynamicProperties]
 class Model
 {
 	use BuildQuery, HasRelationship;
@@ -35,7 +36,7 @@ class Model
 	
 	private $selected = [];
 	
-	private ?string $statement = NULL;
+	protected ?string $statement = NULL;
 	
 	private array $queryStack = [];
 	
@@ -66,10 +67,22 @@ class Model
 	{
 		$instance = self::__instantiate();
 		$page = max($page, 1);
-		$instance->orderBy($orderByColumns)->limit($perPage)->offset(($page - 1) * $perPage);
-		
 		$total_items = $instance->count();
-		$total_pages = ceil($total_items / $perPage);
+		
+		if ($perPage) {
+			$offset = ($page - 1) * $perPage;
+			$total_pages = ceil($total_items / $perPage);
+			
+			if ($offset >= $total_items) {
+				$page = $total_pages;
+				$offset = $page > 1 ? $total_items - 1 : 0;
+			}
+			$instance->orderBy($orderByColumns)->limit($perPage)->offset($offset);
+		} else {
+			$total_pages = 1;
+			$instance->orderBy($orderByColumns);
+		}
+		
 		$pagination = new stdClass();
 		$data = xobject();
 		
@@ -86,7 +99,9 @@ class Model
 	public static function count()
 	{
 		$instance = self::__instantiate();
-		return $instance->db->execute_query("SELECT COUNT(*) AS total FROM `$instance->table`")->fetch_object()->total ?? 0;
+		$statementPartial = !empty($instance->statement) ? " $instance->statement" : '';
+		$statement = "SELECT COUNT(*) AS total FROM `$instance->table` $statementPartial";
+		return $instance->performQuery($instance->cleanClause($statement))->fetch_object()->total ?? 0;
 	}
 	
 	public static function limit(int $limit)
@@ -175,11 +190,15 @@ class Model
 	{
 		$instance = self::__instantiate();
 		$final_result = [];
-		$result = !$instance->statement ? $instance->all() : $instance->get();
 		
-		foreach ($result as $key => $value)
-			$final_result[] = (array) $value->attributes;
-		return $final_result;
+		if ($instance->query && str_contains($instance->query, 'SELECT')) {
+			$result = $instance->performQuery($instance->query);
+			while ($row = $result->fetch_object())
+				$final_result[] = (array) $row;
+		} else
+			foreach ((!$instance->statement ? $instance->all() : $instance->get()) as $key => $value)
+				$final_result[] = (array) $value->attributes;
+		return count($final_result) === 1 ? $final_result[0] : $final_result;
 	}
 	
 	public function delete():mysqli_result|Exception|bool
@@ -187,6 +206,8 @@ class Model
 		try {
 			if (!$this->statement)
 				$this->buildStatement();
+			else
+				$this->statement = "WHERE " . preg_replace('/\b(AND|OR)\s*$/i', '', implode(' ', $this->queryStack));
 			$this->buildQuery('DELETE');
 			$this->statement = str_replace('{table}', "`$this->table`", $this->statement);
 			$query = $this->performQuery($this->statement);
@@ -205,7 +226,7 @@ class Model
 		try {
 			$this->buildQuery('SELECT');
 			$statement = $this->performGet($columns);
-			$query = $this->performQuery($statement);
+			$query = $this->performQuery($this->cleanClause($statement));
 			$this->count = $query->num_rows;
 			
 			while ($row = $query->fetch_object())
@@ -308,16 +329,43 @@ class Model
 	{
 		$this->statement = NULL;
 		$this->query = $statement;
-		$instanceReflection = new ReflectionClass($this);
 		
 		try {
-			if ($instanceReflection->hasMethod('isTrashed'))
-				$this->query = $instanceReflection->getMethod('isTrashed')->invoke($this) ? $this->query : str_replace('WHERE', "WHERE `$this->softDeleteColumn` IS NULL AND", $this->query);
 			return $this->db->execute_query($this->query);
 		} catch (mysqli_sql_exception $exception) {
 			$message = $exception->getMessage() . "<p>Query: $this->query</p>";
 			throw new mysqli_sql_exception($message);
 		}
+	}
+	
+	private function cleanClause(mixed $statement):string
+	{
+		$instanceReflection = new ReflectionClass($this);
+		if ($instanceReflection->hasMethod('showTrashed'))
+			$statement = $instanceReflection->getMethod('showTrashed')->invoke($this) ? $statement : $this->cleanDeleted($statement);
+		return $statement;
+	}
+	
+	private function cleanDeleted(string $query)
+	{
+		$part = "WHERE `$this->softDeleteColumn` IS ";
+		
+		if (str_contains($query, 'WHERE'))
+			$query = str_replace('WHERE', $part . ($this->showTrashedOnly() ? "NOT " : "") . "NULL AND", $query);
+		else {
+			if (preg_match('/\b(LIMIT|OFFSET|ORDER BY)\b/i', $query)) {
+				$replaced = false;
+				$query = preg_replace_callback('/\b(LIMIT|OFFSET|ORDER BY)\b/i', function ($match) use (&$replaced, $part) {
+					if (!$replaced) {
+						$replaced = true;
+						return $part . ($this->showTrashedOnly() ? "NOT " : "") . "NULL " . $match[0];
+					}
+					return $match[0];
+				}, $query);
+			} else
+				$query .= $part . ($this->showTrashedOnly() ? "NOT " : "") . "NULL";
+		}
+		return $query;
 	}
 	
 	private function performUpdate($attributes):mysqli_result|bool
@@ -328,11 +376,10 @@ class Model
 		
 		foreach ($attributes as $column => $value) {
 			$pairCount++;
-			$column_value_pairs .= "`$column` = '$value'" . ($pairCount < $attributeCount ? ', ' : NULL);
+			$column_value_pairs .= "`$column` = " . (!is_null($value) ? (is_numeric($value) || is_bool($value) ? (is_bool($value) ? (int) $value : $value) : "'$value'") : "NULL") . ($pairCount < $attributeCount ? ', ' : NULL);
 		}
-		
 		$statement = str_replace("{table}", "`$this->table`", str_replace("{column_value_pairs}", $column_value_pairs, $this->statement));
-		return $this->performQuery($statement);
+		return $this->performQuery($this->cleanClause($statement));
 	}
 	
 	private function prepareInsertStatement($attributes):array|string

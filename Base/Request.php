@@ -5,6 +5,7 @@ namespace Hodos\Base;
 
 use Hodos\Stack\XObject;
 
+#[\AllowDynamicProperties]
 class Request
 {
 	protected mixed $original;
@@ -25,6 +26,11 @@ class Request
 		foreach ($props as $key => $prop)
 			$this->$key = $prop;
 		return $this;
+	}
+	
+	public function has($key)
+	{
+		return property_exists($this, $key);
 	}
 	
 	public function key($key)
@@ -62,7 +68,7 @@ class Request
 	
 	public function isAjax():bool
 	{
-		return isset($this->server->HTTP_X_REQUESTED_WITH) && strtolower($this->server->HTTP_X_REQUESTED_WITH) === 'xmlhttprequest';
+		return isset($this->server['HTTP_X_REQUESTED_WITH']) && strtolower($this->server['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 	}
 	
 	public static function route()

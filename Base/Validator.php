@@ -91,6 +91,21 @@ class Validator
 						if (isset($data[$field]) && !date_create_from_format($format, $data[$field]))
 							$this->checkValidate($field, 'isNotDate');
 						break;
+					case 'exists':
+						$tableData = $ruleOption;
+						
+						if (!empty($tableData)) {
+							$tableData = explode(',', $tableData);
+							$table = $tableData[0];
+							$column = $tableData[1] ?? 'id';
+						
+							if (!empty($data[$field])) {
+							
+							}
+						}
+						if (isset($data[$field]) && !date_create_from_format($format, $data[$field]))
+							$this->checkValidate($field, 'isNotDate');
+						break;
 					case 'max':
 						$length = intval($ruleOption ?? '8');
 						if ((!empty($data[$field]) && $length) && strlen($data[$field]) > $length)

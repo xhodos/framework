@@ -1,6 +1,8 @@
 <?php
 namespace Hodos\Stack\Template;
 
+use Hodos\Base\Request;
+use Hodos\Base\Route;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
@@ -31,8 +33,13 @@ abstract class Component
 			return $cached;
 		$view = $this->render();
 		
-		if ($view instanceof View)
+		if ($view instanceof View) {
 			$view->params = array_merge($this->collectPublicProperties(), $view->params ?? []);
+			
+			if (request()->isAjax) {
+				return $view->render(true);
+			}
+		}
 		
 		if (!is_string($view) && !($view instanceof View))
 			dd(new RuntimeException("Component::render() must return string or instance of View."));

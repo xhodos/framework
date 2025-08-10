@@ -10,10 +10,11 @@ use Countable;
 {
 	private static ?XObject $instance = NULL;
 	
-	public function __construct()
+	private static function __instantiate()
 	{
-		if (!self::$instance || (self::$instance && (strtolower(get_class(self::$instance)) !== get_class($this))))
-			self::$instance = $this;
+		if (!self::$instance)
+			self::$instance = new static();
+		return self::$instance;
 	}
 	
 	public static function count():int
@@ -22,24 +23,28 @@ use Countable;
 	}
 	
 	/*public static function exists($key) {
-		$instance = self::$instance;
+		$instance = self::__instantiate();
 		return $instance;
 	}*/
+	public static function stack()
+	{
+		return self::__instantiate();
+	}
 	
 	public static function add($key, $value)
 	{
-		$instance = self::$instance;
+		$instance = self::__instantiate();
 		if (!$instance->has($key))
 			$instance->$key = $value;
-		// return $instance;
 	}
 	
 	public static function fromArray($datum)
 	{
-		$instance = self::$instance;
-		foreach ($datum as $key => $data)
+		$instance = self::__instantiate();
+		foreach ($datum as $key => $data) {
 			if (!$instance->has($key))
-				$instance->$key = $data;
+				$instance->{$key} = $data;
+		}
 		return $instance;
 	}
 	
@@ -56,21 +61,21 @@ use Countable;
 	
 	public static function get(string $key)
 	{
-		$instance = self::$instance;
+		$instance = self::__instantiate();
 		return $instance->has($key) ? $instance->$key : NULL;
 	}
 	
 	public static function has(string $key):bool
 	{
-		$instance = self::$instance;
-		if ($instance->$key)
+		$instance = self::__instantiate();
+		if (property_exists($instance, $key))
 			return true;
 		return false;
 	}
 	
 	public static function delete(string $key):void
 	{
-		$instance = self::$instance;
+		$instance = self::__instantiate();
 		if ($instance->$key)
 			unset($instance->$key);
 	}

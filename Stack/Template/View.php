@@ -30,8 +30,7 @@ class View
 		ob_start();
 		include $this->view;
 		$content = ob_get_clean();
-		
-		if ($silent)
+		if ($silent || request()->isAjax)
 			return $content; // Just return as string
 		
 		// Write to a custom output stream (defaults to stdout)

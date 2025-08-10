@@ -87,7 +87,7 @@ final class Stack
 			echo $value;
 		} elseif (is_array($value)) {
 			header('Content-Type: application/json');
-			echo json_encode($value);
+			echo json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 		}
 		// ... add more as you need (redirects, responses, etc.)
 		return !!$value;
