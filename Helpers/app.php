@@ -243,7 +243,6 @@ if (!function_exists('loadFile')) {
 	function loadFile($path, ?array $data = NULL)
 	{
 		$file = correctDirPath(getRootPath() . DIRECTORY_SEPARATOR . useDirectorySeparator($path) . '.php');
-		
 		if (is_readable($file)) {
 			if (!empty($data))
 				extract($data);
